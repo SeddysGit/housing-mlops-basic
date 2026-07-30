@@ -223,6 +223,17 @@
     n.src.start(t0); n.src.stop(t0 + 2.05);
   };
 
+  AudioSys.heal = function () {
+    if (!AudioSys.ctx) return;
+    const t0 = now();
+    const freqs = [660, 880, 1174];
+    for (let i = 0; i < freqs.length; i++) {
+      const { o, g } = osc('sine', freqs[i]);
+      env(g, t0 + i * 0.08, 0.04, 0.1, 0.16, 0.02, 0.2);
+      o.start(t0 + i * 0.08); o.stop(t0 + i * 0.08 + 0.45);
+    }
+  };
+
   AudioSys.announce = function () {
     if (!AudioSys.ctx) return;
     const t0 = now();

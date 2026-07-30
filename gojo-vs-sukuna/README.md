@@ -27,6 +27,7 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
 | Skill 1 | `U` | `;` |
 | Skill 2 | `I` | `'` |
 | Skill 3 | `O` | `]` |
+| **Reverse Cursed Technique** (heal) | hold `N` | hold `[` |
 | **Domain Expansion** | `P` | `Enter` |
 
 `H` controls help · `M` mute · `Esc` pause · `R` rematch on the result screen.
@@ -51,8 +52,11 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
   the red ring. No shelter — run for the edge or eat the storm.
 
 **Shared mechanics**
-- **Cursed Energy (CE)**: regenerates over time, builds faster by landing/taking hits.
-  Skills cost CE; a **full bar** unlocks your Domain Expansion.
+- **Cursed Energy (CE)**: a deep 150-point reserve that regenerates over time and builds
+  faster by landing/taking hits. Skills cost CE; pushing past the **gold mark (100)**
+  unlocks your Domain Expansion — with reserve to spare.
+- **Reverse Cursed Technique**: hold the heal key to channel CE into health. You're
+  rooted and vulnerable while channeling — any hit interrupts it.
 - **Black Flash**: every melee hit has a chance to spark a Black Flash — 2.5× damage,
   time briefly distorts, and you gain bonus CE.
 - **Domain Clash**: expand your domain while the enemy's is up (or mid-cast) and the

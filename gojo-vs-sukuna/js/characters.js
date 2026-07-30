@@ -350,22 +350,23 @@
   }
 
   function runPose(t, speed, strafe) {
-    const f = t * 9;
-    const s = Math.sin(f) * 0.7 * speed;
+    const f = t * 9.5;
+    const sn = Math.sin(f);
+    const s = sn * 0.75 * speed;
     return {
       pose: {
         legL: [s, 0, 0],
-        shinL: [Math.max(0, -Math.sin(f)) * 0.9 * speed, 0, 0],
+        shinL: [Math.max(0, -sn) * 1.0 * speed, 0, 0],
         legR: [-s, 0, 0],
-        shinR: [Math.max(0, Math.sin(f)) * 0.9 * speed, 0, 0],
-        armL: [-s * 0.7, 0, 0.08],
-        foreL: [-0.5, 0, 0],
-        armR: [s * 0.7, 0, -0.08],
-        foreR: [-0.5, 0, 0],
-        torsoG: [0.18 * speed, strafe * 0.15, -strafe * 0.1],
-        headG: [-0.08, 0, 0],
+        shinR: [Math.max(0, sn) * 1.0 * speed, 0, 0],
+        armL: [-s * 0.8, 0, 0.08],
+        foreL: [-0.5 - Math.max(0, sn) * 0.55 * speed, 0, 0],
+        armR: [s * 0.8, 0, -0.08],
+        foreR: [-0.5 - Math.max(0, -sn) * 0.55 * speed, 0, 0],
+        torsoG: [0.2 * speed, strafe * 0.18, -strafe * 0.12],
+        headG: [-0.1 + Math.abs(sn) * 0.05, 0, strafe * 0.06],
       },
-      bodyY: Math.abs(Math.sin(f)) * 0.04 * speed,
+      bodyY: Math.abs(sn) * 0.05 * speed,
     };
   }
 
@@ -389,31 +390,95 @@
     stunned: { pose: { torsoG: [0.3, 0, 0.08], headG: [0.45, 0.25, 0.15], armL: [0.35, 0, 0.25], foreL: [-0.15, 0, 0], armR: [0.35, 0, -0.25], foreR: [-0.15, 0, 0], legL: [0.1, 0, 0], legR: [-0.1, 0, 0] }, bodyY: -0.1 },
     knockdown: { pose: { armL: [-2.6, 0, 0.4], armR: [-2.6, 0, -0.4], legL: [-0.25, 0, 0], legR: [-0.4, 0, 0], shinL: [0.3, 0, 0], shinR: [0.5, 0, 0], headG: [-0.4, 0, 0] }, bodyY: 0, bodyRotX: -1.45 },
     victory: { pose: { armR: [-2.9, 0, -0.25], foreR: [-0.2, 0, 0], armL: [0.1, 0, 0.15], torsoG: [-0.08, 0, 0], headG: [-0.2, 0, 0] }, bodyY: 0 },
+    // attack windups (anticipation frames)
+    wind1: { pose: { armR: [0.45, 0, -0.5], foreR: [-1.7, 0, 0], armL: [-0.4, 0, 0.35], foreL: [-0.9, 0, 0], torsoG: [0.12, 0.5, 0], headG: [0, -0.28, 0], legL: [0.12, 0, 0], legR: [-0.12, 0, 0] }, bodyY: -0.04 },
+    wind2: { pose: { armL: [0.45, 0, 0.5], foreL: [-1.7, 0, 0], armR: [-0.4, 0, -0.35], foreR: [-0.9, 0, 0], torsoG: [0.12, -0.5, 0], headG: [0, 0.28, 0], legL: [-0.12, 0, 0], legR: [0.12, 0, 0] }, bodyY: -0.04 },
+    wind3: { pose: { legR: [0.45, 0, 0], shinR: [1.35, 0, 0], torsoG: [-0.18, 0.35, 0], armL: [-0.35, 0, 0.45], armR: [0.35, 0, -0.45], headG: [0.05, -0.15, 0] }, bodyY: -0.07 },
+    // reverse cursed technique channel
+    rct: { pose: { armL: [-0.85, 0, 0.62], foreL: [-1.5, 0, 0.28], armR: [-0.85, 0, -0.62], foreR: [-1.5, 0, -0.28], headG: [0.4, 0, 0], torsoG: [0.14, 0, 0], legL: [0.1, 0, 0], legR: [-0.1, 0, 0] }, bodyY: -0.05 },
   };
+
+  // keyframed attack timelines: [tStart, poseName|null(=idle)|'@heavyFollow', blendSpeed]
+  const CLIPS = {
+    light1: [[0, 'wind1', 26], [0.06, 'light1', 36], [0.22, null, 12]],
+    light2: [[0, 'wind2', 26], [0.06, 'light2', 36], [0.22, null, 12]],
+    light3: [[0, 'wind3', 24], [0.1, 'light3', 32], [0.34, null, 10]],
+    heavy: [[0, 'heavy', 15], [0.26, '@heavyFollow', 32], [0.5, null, 10]],
+    dash: [[0, 'dash', 22]],
+  };
+
+  // secondary motion layered on top of the posed skeleton
+  function overlays(f, rig, time, dt) {
+    // breathing
+    rig.torsoG.scale.y = 1 + Math.sin(time * 2.2 + f.animSeed * 3) * 0.013;
+    // lean into velocity (converted to fighter-local axes)
+    const fx = Math.sin(f.facing), fz = Math.cos(f.facing);
+    const vf = f.vel.x * fx + f.vel.z * fz;
+    const vs = f.vel.x * fz - f.vel.z * fx;
+    rig.body.rotation.x += Math.max(-0.15, Math.min(0.15, vf * 0.012));
+    rig.body.rotation.z += Math.max(-0.12, Math.min(0.12, -vs * 0.01));
+    // landing squash & stretch
+    if (f.landT > 0) {
+      f.landT -= dt;
+      const sq = Math.sin(Math.max(0, f.landT) / 0.22 * Math.PI);
+      rig.body.scale.set(1 + sq * 0.12, 1 - sq * 0.17, 1 + sq * 0.12);
+    } else {
+      rig.body.scale.set(1, 1, 1);
+    }
+    // tumble when launched airborne
+    if (!f.onGround && (f.state === 'hitstun' || f.state === 'knockdown')) {
+      rig.body.rotation.y += dt * 10;
+    } else {
+      rig.body.rotation.y *= Math.max(0, 1 - dt * 8);
+    }
+    // victory arm pump
+    if (f.animName === 'victory') rig.armR.rotation.x += Math.sin(time * 7) * 0.07;
+    // six eyes / king-of-curses glow flare
+    const glow = 2.2 + (f.eyeGlow || 0) * 5;
+    for (const e of f.model.eyes) e.material.emissiveIntensity = glow;
+  }
 
   // f: fighter object from game.js
   CharFactory.animateFighter = function (f, time, dt) {
     const rig = f.model.rig;
-    const k = Math.min(1, dt * 14);
+    let k = Math.min(1, dt * 14);
     let entry = null;
     let bodyRotX = 0;
 
-    switch (f.animName) {
-      case 'run': {
-        entry = runPose(time + f.animSeed, Math.min(1, f.animSpeed), f.animStrafe || 0);
-        break;
-      }
-      case 'idle':
+    const clip = f.action && CLIPS[f.action.name];
+    if (clip) {
+      let stage = clip[0];
+      for (const st of clip) if (f.action.t >= st[0]) stage = st;
+      let poseName = stage[1];
+      if (poseName === '@heavyFollow') poseName = f.charKey === 'sukuna' ? 'slashR' : 'heavyHit';
+      k = Math.min(1, dt * stage[2]);
+      if (poseName === null) {
         entry = idlePose(f.charKey, time + f.animSeed);
-        break;
-      default: {
-        const p = POSES[f.animName] || idlePose(f.charKey, time + f.animSeed);
-        entry = p.pose ? p : idlePose(f.charKey, time + f.animSeed);
+      } else {
+        const p = POSES[poseName];
+        entry = p;
         if (p.bodyRotX) bodyRotX = p.bodyRotX;
-        break;
       }
+    } else {
+      switch (f.animName) {
+        case 'run': {
+          entry = runPose(time + f.animSeed, Math.min(1, f.animSpeed), f.animStrafe || 0);
+          break;
+        }
+        case 'idle':
+          entry = idlePose(f.charKey, time + f.animSeed);
+          break;
+        default: {
+          const p = POSES[f.animName] || idlePose(f.charKey, time + f.animSeed);
+          entry = p.pose ? p : idlePose(f.charKey, time + f.animSeed);
+          if (p.bodyRotX) bodyRotX = p.bodyRotX;
+          break;
+        }
+      }
+      if (f.animName === 'hitstun') k = Math.min(1, dt * 24);
     }
     applyPose(rig, entry.pose, k, entry.bodyY || 0, bodyRotX);
+    overlays(f, rig, time, dt);
   };
 
   window.CharFactory = CharFactory;

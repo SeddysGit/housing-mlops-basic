@@ -61,6 +61,7 @@
   .side.right .ce-bar { transform: scaleX(-1); align-self: flex-end; }
   .ce-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #3f7dff, #9fd4ff); }
   .ce-fill.full { background: linear-gradient(90deg, #b16bff, #ffd76b); box-shadow: 0 0 12px rgba(200,140,255,0.9); }
+  .ce-mark { position: absolute; left: 66.6%; top: -1px; bottom: -1px; width: 2px; background: rgba(255,215,107,0.85); }
   .guard-label { font-size: 10px; letter-spacing: 0.2em; color: #8b96b8; margin-top: 3px; text-transform: uppercase; }
   .pips { display: flex; gap: 6px; margin-top: 6px; }
   .pip { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(200,210,255,0.5); background: rgba(20,24,44,0.7); }
@@ -145,6 +146,7 @@
           <li><b>Reversal: Red</b> — repulsive blast, huge knockback<span>I</span></li>
           <li><b>Hollow Purple</b> — charge, then erase everything ahead<span>O</span></li>
           <li><b>Domain: Unlimited Void</b> — stun in infinite information<span>P</span></li>
+          <li><b>Reverse Cursed Technique</b> — channel CE into healing<span>hold N</span></li>
           <li><b>Black Flash</b> — chance on melee hits, 2.5× damage<span>auto</span></li>
         </ul>
       </div>
@@ -157,6 +159,7 @@
           <li><b>Cleave</b> — blink flurry up close, big slash at range<span>I</span></li>
           <li><b>Fire Arrow</b> — “Open.” Explosive flame shot<span>O</span></li>
           <li><b>Domain: Malevolent Shrine</b> — slashes rain, no shelter<span>P</span></li>
+          <li><b>Reverse Cursed Technique</b> — channel CE into healing<span>hold N</span></li>
           <li><b>Black Flash</b> — chance on melee hits, 2.5× damage<span>auto</span></li>
         </ul>
       </div>
@@ -170,7 +173,7 @@
       <div class="side left">
         <div class="fighter-name" id="p1-name">GOJO</div>
         <div class="hp-bar"><div class="hp-lag" id="p1-hp-lag"></div><div class="hp-fill" id="p1-hp"></div></div>
-        <div class="ce-bar"><div class="ce-fill" id="p1-ce"></div></div>
+        <div class="ce-bar"><div class="ce-fill" id="p1-ce"></div><div class="ce-mark"></div></div>
         <div class="guard-label" id="p1-guard">Infinity</div>
         <div class="pips" id="p1-pips"><div class="pip"></div><div class="pip"></div></div>
         <div class="skills-row" id="p1-skills"></div>
@@ -179,7 +182,7 @@
       <div class="side right">
         <div class="fighter-name" id="p2-name">SUKUNA</div>
         <div class="hp-bar"><div class="hp-lag" id="p2-hp-lag"></div><div class="hp-fill" id="p2-hp"></div></div>
-        <div class="ce-bar"><div class="ce-fill" id="p2-ce"></div></div>
+        <div class="ce-bar"><div class="ce-fill" id="p2-ce"></div><div class="ce-mark"></div></div>
         <div class="guard-label" id="p2-guard">Guard</div>
         <div class="pips" id="p2-pips"><div class="pip"></div><div class="pip"></div></div>
         <div class="skills-row" id="p2-skills"></div>
@@ -193,9 +196,9 @@
 
   <!-- HELP -->
   <div id="help" class="hidden">
-    <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O skills · P Domain<br>
-    <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] skills · Enter Domain<br>
-    Land melee hits for a chance at <b>BLACK FLASH</b> · Fill the blue CE bar to unleash your <b>DOMAIN EXPANSION</b>
+    <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O skills · N heal (RCT) · P Domain<br>
+    <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] skills · [ heal · Enter Domain<br>
+    Land melee hits for a chance at <b>BLACK FLASH</b> · CE past the gold mark unleashes your <b>DOMAIN EXPANSION</b> · Hold heal to channel <b>REVERSE CURSED TECHNIQUE</b>
   </div>
 
   <!-- RESULT -->

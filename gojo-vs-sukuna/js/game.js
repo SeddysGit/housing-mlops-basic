@@ -10,7 +10,9 @@
   const GRAVITY = -34;
   const WALK_SPEED = 6.4;
   const MAX_HP = 1000;
-  const MAX_CE = 100;
+  const MAX_CE = 150;       // deeper cursed-energy reserves
+  const DOMAIN_COST = 100;  // domain needs 100, leaving a usable surplus
+  const START_CE = 75;
   const ROUND_TIME = 99;
   const WINS_NEEDED = 2;
   const BLACK_FLASH_CHANCE = 0.12;
@@ -81,8 +83,8 @@
   const held = new Set();
   const pressed = new Set();
 
-  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', dom: 'KeyP' };
-  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', dom: 'Enter' };
+  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', dom: 'KeyP', rct: 'KeyN' };
+  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', dom: 'Enter', rct: 'BracketLeft' };
 
   const GAME_CODES = new Set();
   [P1MAP, P2MAP].forEach(m => Object.keys(m).forEach(k => GAME_CODES.add(m[k])));
@@ -110,6 +112,7 @@
       light: pressed.has(map.light),
       heavy: pressed.has(map.heavy),
       guard: held.has(map.guard),
+      rct: held.has(map.rct),
       s1: pressed.has(map.s1),
       s2: pressed.has(map.s2),
       s3: pressed.has(map.s3),
@@ -117,7 +120,7 @@
     };
   }
 
-  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, s1: false, s2: false, s3: false, dom: false };
+  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, dom: false };
 
   /* ================= THREE SETUP ================= */
   function initThree() {
@@ -543,8 +546,12 @@
       facing: 0,
       hp: MAX_HP,
       displayHp: MAX_HP,
-      ce: 50,
+      ce: START_CE,
       onGround: true,
+      landT: 0,
+      eyeGlow: 0,
+      channeling: false,
+      healSndT: 0,
       state: 'idle', // idle|dash|attack|skill|guard|hitstun|knockdown|stunned|domainCast|ko|win|repelled
       action: null,  // {name,t,dur,data}
       cds: { s1: 0, s2: 0, s3: 0 },
@@ -572,7 +579,10 @@
     f.vel.set(0, 0, 0);
     f.hp = MAX_HP;
     f.displayHp = MAX_HP;
-    f.ce = 50;
+    f.ce = START_CE;
+    f.landT = 0;
+    f.eyeGlow = 0;
+    f.channeling = false;
     f.state = 'idle';
     f.action = null;
     f.cds = { s1: 0, s2: 0, s3: 0 };
@@ -585,7 +595,8 @@
     f.animName = 'idle';
     f.model.group.position.copy(f.pos);
     f.model.group.rotation.y = faceAngle;
-    f.model.rig.body.rotation.x = 0;
+    f.model.rig.body.rotation.set(0, 0, 0);
+    f.model.rig.body.scale.set(1, 1, 1);
     if (f.ai) f.ai = makeAI(mode.difficulty);
   }
 
@@ -636,6 +647,7 @@
       blackFlash = true;
       amount *= 2.5;
       attacker.ce = Math.min(MAX_CE, attacker.ce + 15);
+      attacker.eyeGlow = 1.4;
       blackFlashFX(target.pos);
     }
 
@@ -753,6 +765,7 @@
     f.ce -= sk.ce;
     f.cds[slot] = sk.cd;
     f.state = 'skill';
+    f.eyeGlow = Math.max(f.eyeGlow, 1);
     if (f.charKey === 'gojo') {
       if (slot === 's1') startAction(f, 'blue', 0.65);
       else if (slot === 's2') startAction(f, 'red', 0.6);
@@ -780,9 +793,10 @@
   }
 
   function tryDomain(f) {
-    if (f.ce < MAX_CE) return;
+    if (f.ce < DOMAIN_COST) return;
     if (domain && domain.owner === f) return;
-    f.ce = 0;
+    f.ce -= DOMAIN_COST;
+    f.eyeGlow = 1.4;
     f.state = 'domainCast';
     startAction(f, 'domainCast', 1.35, { armor: true });
     AudioSys.domain();
@@ -1336,8 +1350,9 @@
     f.invulnT = Math.max(0, f.invulnT - dt);
     f.stunT = Math.max(0, f.stunT - dt);
     if (f.state === 'stunned' && f.stunT <= 0) f.state = 'idle';
-    if (!f.guarding && !f.action) f.ce = Math.min(MAX_CE, f.ce + 5 * dt);
+    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 6 * dt);
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt * 6);
+    f.eyeGlow = Math.max(0, f.eyeGlow - dt * 1.4);
 
     // face opponent (unless down/ko)
     if (f.state !== 'ko' && f.state !== 'knockdown') {
@@ -1374,6 +1389,26 @@
       if (f.state === 'guard') f.state = 'idle';
     }
     f.guardBreakT = Math.max(0, f.guardBreakT - dt);
+
+    // Reverse Cursed Technique: hold to convert CE into health (vulnerable while channeling)
+    f.channeling = false;
+    if (canAct(f) && inp.rct && !f.guarding && f.hp < MAX_HP && f.ce > 4) {
+      f.channeling = true;
+      f.state = 'rct';
+      f.ce = Math.max(0, f.ce - 22 * dt);
+      f.hp = Math.min(MAX_HP, f.hp + 60 * dt);
+      f.eyeGlow = Math.max(f.eyeGlow, 0.5);
+      f.healSndT -= dt;
+      if (f.healSndT <= 0) { f.healSndT = 0.55; AudioSys.heal(); }
+      if (Math.random() < 0.6) {
+        const ha = rand(0, Math.PI * 2), hr = rand(0.8, 1.6);
+        tmpV.set(f.pos.x + Math.cos(ha) * hr, f.pos.y + rand(0.1, 1.9), f.pos.z + Math.sin(ha) * hr);
+        tmpV2.set(f.pos.x - tmpV.x, f.pos.y + 1.2 - tmpV.y, f.pos.z - tmpV.z).multiplyScalar(2.0);
+        spawnP(tmpV, tmpV2, 0.45, 0.42, 0x7dffb0);
+      }
+    } else if (f.state === 'rct') {
+      f.state = 'idle';
+    }
 
     // input buffer: presses made slightly early still come out (~0.3s window)
     for (const bk in f.buffer) {
@@ -1422,7 +1457,7 @@
 
     // movement
     const moving = (inp.mx !== 0 || inp.mz !== 0);
-    const freeMove = canAct(f) && !f.guarding;
+    const freeMove = canAct(f) && !f.guarding && !f.channeling;
     if (freeMove && moving) {
       const fw = forwardOf(f);
       const right = tmpV.set(fw.z, 0, -fw.x).clone();
@@ -1443,9 +1478,12 @@
     f.vel.y += GRAVITY * dt;
     f.pos.addScaledVector(f.vel, dt);
     if (f.pos.y <= 0) {
-      if (!f.onGround && f.vel.y < -14) {
-        addShake(0.15, 0.15);
-        burst(f.pos.clone().setY(0.2), 0x888899, 8, 4, 0.3, 0.5);
+      if (!f.onGround) {
+        f.landT = 0.22;
+        if (f.vel.y < -14) {
+          addShake(0.15, 0.15);
+          burst(f.pos.clone().setY(0.2), 0x888899, 8, 4, 0.3, 0.5);
+        }
       }
       f.pos.y = 0;
       f.vel.y = 0;
@@ -1466,10 +1504,25 @@
       if (f.state === 'stunned') f.animName = 'stunned';
       else if (f.state === 'ko') f.animName = 'knockdown';
       else if (f.state === 'win') f.animName = 'victory';
+      else if (f.channeling) f.animName = 'rct';
       else if (f.guarding) f.animName = f.charKey === 'gojo' ? 'infinity' : 'guard';
       else if (!f.onGround) f.animName = 'jump';
       else if (moving && freeMove) f.animName = 'run';
       else f.animName = 'idle';
+    }
+
+    // motion trails on striking limbs
+    if (f.action) {
+      const trailMap = { light1: 'foreR', light2: 'foreL', light3: 'foreR', heavy: 'foreR', cleaveFlurry: (f.animName === 'slashL' ? 'foreL' : 'foreR'), cleaveWave: 'foreR', dismantle: 'foreR' };
+      const foreName = trailMap[f.action.name];
+      if (foreName && Math.random() < 0.8) {
+        const hand = f.model.rig[foreName].userData.hand;
+        hand.getWorldPosition(tmpV);
+        tmpV2.set(rand(-0.6, 0.6), rand(-0.2, 0.7), rand(-0.6, 0.6));
+        spawnP(tmpV, tmpV2, 0.16, 0.42, f.cfg.color);
+      } else if (f.action.name === 'dash' && Math.random() < 0.8) {
+        spawnP(f.pos.clone().add(tmpV.set(rand(-0.3, 0.3), rand(0.3, 1.4), rand(-0.3, 0.3))), tmpV2.set(0, 0, 0), 0.18, 0.5, 0xdde6ff);
+      }
     }
 
     // aura particles for domain owners
@@ -1503,18 +1556,25 @@
       normal: { think: 0.24, guardP: 0.3, aggr: 0.75, skillP: 0.65 },
       hard: { think: 0.15, guardP: 0.55, aggr: 1, skillP: 0.85 },
     };
-    return Object.assign({ t: 0, moveX: 0, moveZ: 0, guardT: 0, strafeDir: Math.random() < 0.5 ? 1 : -1 }, presets[difficulty] || presets.normal);
+    return Object.assign({ t: 0, moveX: 0, moveZ: 0, guardT: 0, rctT: 0, strafeDir: Math.random() < 0.5 ? 1 : -1 }, presets[difficulty] || presets.normal);
   }
 
   function aiInput(f, dt) {
     const ai = f.ai;
     const o = opponentOf(f);
-    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, s1: false, s2: false, s3: false, dom: false };
+    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, dom: false };
     if (f.state === 'ko' || gameState !== 'fight') return inp;
 
     ai.t -= dt;
     ai.guardT = Math.max(0, ai.guardT - dt);
+    ai.rctT = Math.max(0, ai.rctT - dt);
     const d = distXZ(f.pos, o.pos);
+
+    // channel Reverse Cursed Technique while the enemy is far away
+    if (ai.rctT > 0) {
+      if (d > 6 && f.hp < MAX_HP) { inp.rct = true; return inp; }
+      ai.rctT = 0;
+    }
 
     // escape enemy shrine
     if (domain && domain.key === 'shrine' && domain.owner !== f) {
@@ -1540,7 +1600,7 @@
 
       // domain decision (counter-cast for a clash when the enemy expands theirs)
       const oppCastingDomain = o.action && o.action.name === 'domainCast';
-      if (f.ce >= MAX_CE && (f.hp < MAX_HP * 0.5 || o.hp < MAX_HP * 0.4 || oppCastingDomain || (domain && domain.owner !== f)) && Math.random() < (oppCastingDomain ? 0.85 : 0.5)) {
+      if (f.ce >= DOMAIN_COST && (f.hp < MAX_HP * 0.5 || o.hp < MAX_HP * 0.4 || oppCastingDomain || (domain && domain.owner !== f)) && Math.random() < (oppCastingDomain ? 0.85 : 0.5)) {
         inp.dom = true;
         return inp;
       }
@@ -1548,6 +1608,12 @@
       if (oppAttacking && d < 4 && Math.random() < ai.guardP) {
         ai.guardT = rand(0.3, 0.7);
         inp.guard = true;
+        return inp;
+      }
+      // heal up when hurt and safe
+      if (d > 8.5 && f.hp < MAX_HP * 0.65 && f.ce > 45 && !domain && Math.random() < 0.45) {
+        ai.rctT = rand(0.9, 1.8);
+        inp.rct = true;
         return inp;
       }
       // punish big casts by rushing or ranged skill
@@ -1676,7 +1742,7 @@
       side.hp.style.width = (clamp(f.hp / MAX_HP, 0, 1) * 100) + '%';
       side.hpLag.style.width = (clamp(f.displayHp / MAX_HP, 0, 1) * 100) + '%';
       side.ce.style.width = (clamp(f.ce / MAX_CE, 0, 1) * 100) + '%';
-      side.ce.classList.toggle('full', f.ce >= MAX_CE);
+      side.ce.classList.toggle('full', f.ce >= DOMAIN_COST);
       side.guardLbl.textContent = f.cfg.guardName;
       const icons = side.skills.children;
       for (const el of icons) {
@@ -1684,9 +1750,9 @@
         const sk = f.cfg.skills[slot];
         const cdEl = el.querySelector('.skill-cd');
         if (slot === 'dom') {
-          const ready = f.ce >= MAX_CE;
+          const ready = f.ce >= sk.ce;
           el.classList.toggle('ready', ready);
-          cdEl.style.height = ((1 - f.ce / MAX_CE) * 100) + '%';
+          cdEl.style.height = (Math.max(0, 1 - f.ce / sk.ce) * 100) + '%';
         } else {
           const cd = f.cds[slot];
           const ready = cd <= 0 && f.ce >= sk.ce;
