@@ -41,6 +41,12 @@
     return m;
   }
 
+  function cap(r, len, material) {
+    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), material);
+    m.castShadow = true;
+    return m;
+  }
+
   /* ---------- shared humanoid rig ----------
      root
        body (y offset so feet on ground; used for lean/crouch/knockdown)
@@ -97,21 +103,25 @@
     shinR.position.y = -0.44;
     legR.add(shinR);
 
-    return { root, body, hips, torsoG, headG, armL, foreL, armR, foreR, legL, shinL, legR, shinR };
+    return { root, body, hips, torsoG, headG, armL, foreL, armR, foreR, legL, shinL, legR, shinR, userData: { baseRotX: 0 } };
   }
 
   function limbMeshes(rig, skinM, upperM, lowerM, shoeM, pantsUM, pantsLM) {
-    // arms
+    // arms: capsules with sphere joints so nothing reads as a box
     for (const side of ['L', 'R']) {
       const arm = rig['arm' + side];
       const fore = rig['fore' + side];
-      const upper = cyl(0.055, 0.065, 0.30, upperM);
+      const shoulder = sph(0.078, upperM, 10, 8);
+      arm.add(shoulder);
+      const upper = cap(0.056, 0.19, upperM);
       upper.position.y = -0.15;
       arm.add(upper);
-      const forearm = cyl(0.045, 0.055, 0.28, lowerM);
+      const elbow = sph(0.06, lowerM, 10, 8);
+      fore.add(elbow);
+      const forearm = cap(0.048, 0.17, lowerM);
       forearm.position.y = -0.14;
       fore.add(forearm);
-      const hand = sph(0.06, skinM, 8, 6);
+      const hand = sph(0.062, skinM, 10, 8);
       hand.position.y = -0.31;
       fore.add(hand);
       fore.userData.hand = hand;
@@ -120,14 +130,19 @@
     for (const side of ['L', 'R']) {
       const leg = rig['leg' + side];
       const shin = rig['shin' + side];
-      const thigh = cyl(0.07, 0.08, 0.44, pantsUM);
+      const hip = sph(0.088, pantsUM, 10, 8);
+      leg.add(hip);
+      const thigh = cap(0.075, 0.27, pantsUM);
       thigh.position.y = -0.22;
       leg.add(thigh);
-      const shinMesh = cyl(0.055, 0.07, 0.42, pantsLM);
+      const knee = sph(0.068, pantsLM, 10, 8);
+      shin.add(knee);
+      const shinMesh = cap(0.058, 0.25, pantsLM);
       shinMesh.position.y = -0.21;
       shin.add(shinMesh);
-      const foot = box(0.11, 0.07, 0.24, shoeM);
-      foot.position.set(0, -0.435, 0.05);
+      const foot = sph(0.085, shoeM, 10, 8);
+      foot.scale.set(1, 0.55, 1.7);
+      foot.position.set(0, -0.43, 0.06);
       shin.add(foot);
     }
   }
@@ -144,29 +159,33 @@
 
     limbMeshes(rig, skin, jacket, jacket, shoe, jacket, jacketDark);
 
-    // torso: dark high-collar jacket
-    const chest = box(0.46, 0.5, 0.26, jacket);
-    chest.position.y = 0.3;
+    // torso: dark high-collar jacket (rounded)
+    const chest = cap(0.205, 0.24, jacket);
+    chest.scale.set(1.35, 1, 0.82);
+    chest.position.y = 0.32;
     rig.torsoG.add(chest);
-    const waist = box(0.4, 0.18, 0.24, jacketDark);
-    waist.position.y = 0.0;
+    const waist = sph(0.19, jacketDark, 12, 10);
+    waist.scale.set(1.25, 0.8, 0.85);
+    waist.position.y = 0.02;
     rig.torsoG.add(waist);
     // zipper line
-    const zip = box(0.02, 0.48, 0.015, mat(0x3a4a6b, { metalness: 0.6, roughness: 0.3 }));
-    zip.position.set(0, 0.3, 0.135);
+    const zip = box(0.02, 0.4, 0.012, mat(0x3a4a6b, { metalness: 0.6, roughness: 0.3 }));
+    zip.position.set(0, 0.32, 0.175);
     rig.torsoG.add(zip);
     // high collar
-    const collar = box(0.34, 0.14, 0.22, jacket);
+    const collar = cyl(0.155, 0.175, 0.14, jacket, 12);
     collar.position.set(0, 0.58, -0.01);
     rig.torsoG.add(collar);
 
     // head
-    const head = box(0.26, 0.28, 0.26, skin);
-    head.position.y = 0.14;
+    const head = sph(0.155, skin, 14, 12);
+    head.scale.set(1, 1.08, 0.95);
+    head.position.y = 0.15;
     rig.headG.add(head);
     // white spiky hair
-    const hairCore = box(0.3, 0.16, 0.3, hairM);
-    hairCore.position.y = 0.3;
+    const hairCore = sph(0.165, hairM, 12, 10);
+    hairCore.scale.set(1.02, 0.78, 1.02);
+    hairCore.position.set(0, 0.29, -0.01);
     rig.headG.add(hairCore);
     const spikes = [
       [0, 0.42, 0, 0.09, 0.22, 0],
@@ -199,12 +218,12 @@
   /* ============ SUKUNA ============ */
   CharFactory.buildSukuna = function () {
     const rig = buildRig();
-    const skin = mat(0xd9a172);
+    const skin = mat(0xc98e5c);
     const tattoo = mat(0x1c1c1c, { roughness: 0.9 });
     const pantsM = mat(0xe6ddc4, { roughness: 0.9 });
     const hemM = mat(0x22201c);
     const shoe = mat(0x2a2118);
-    const hairM = mat(0xd9808f, { roughness: 0.65 });
+    const hairM = mat(0xe0707f, { roughness: 0.65 });
     const eyeM = mat(0xff4422, { emissive: 0xff3311, emissiveIntensity: 2.2 });
 
     limbMeshes(rig, skin, skin, skin, shoe, pantsM, pantsM);
@@ -219,26 +238,32 @@
       rig['fore' + side].add(foreRing);
     }
 
-    // bare muscular torso
-    const chest = box(0.48, 0.32, 0.27, skin);
-    chest.position.y = 0.4;
+    // bare muscular torso (rounded)
+    const chest = cap(0.215, 0.2, skin);
+    chest.scale.set(1.42, 1, 0.88);
+    chest.position.y = 0.38;
     rig.torsoG.add(chest);
-    const abs = box(0.4, 0.28, 0.24, skin);
-    abs.position.y = 0.12;
+    const abs = sph(0.185, skin, 12, 10);
+    abs.scale.set(1.2, 0.95, 0.8);
+    abs.position.y = 0.1;
     rig.torsoG.add(abs);
-    // chest tattoo lines
-    const tLine1 = box(0.5, 0.035, 0.02, tattoo);
-    tLine1.position.set(0, 0.46, 0.145);
-    rig.torsoG.add(tLine1);
-    const tLine2 = box(0.42, 0.03, 0.02, tattoo);
-    tLine2.position.set(0, 0.2, 0.13);
-    rig.torsoG.add(tLine2);
+    // chest tattoo bands wrap the torso
+    const tBand1 = cyl(0.232, 0.232, 0.032, tattoo, 16);
+    tBand1.scale.set(1.4, 1, 0.87);
+    tBand1.position.y = 0.46;
+    rig.torsoG.add(tBand1);
+    const tBand2 = cyl(0.183, 0.183, 0.028, tattoo, 16);
+    tBand2.scale.set(1.2, 1, 0.79);
+    tBand2.position.y = 0.16;
+    rig.torsoG.add(tBand2);
     // belly band + rope belt
-    const belt = box(0.42, 0.12, 0.26, mat(0xcbb9a2));
-    belt.position.y = -0.03;
+    const belt = cyl(0.195, 0.195, 0.13, mat(0xcbb9a2), 14);
+    belt.scale.set(1.25, 1, 0.87);
+    belt.position.y = -0.02;
     rig.torsoG.add(belt);
-    const rope = box(0.44, 0.045, 0.28, mat(0x6b5a3e));
-    rope.position.y = -0.03;
+    const rope = cyl(0.202, 0.202, 0.05, mat(0x6b5a3e), 14);
+    rope.scale.set(1.25, 1, 0.87);
+    rope.position.y = -0.02;
     rig.torsoG.add(rope);
     // hakama hem marks
     for (const side of ['L', 'R']) {
@@ -248,12 +273,14 @@
     }
 
     // head
-    const head = box(0.26, 0.28, 0.26, skin);
-    head.position.y = 0.14;
+    const head = sph(0.155, skin, 14, 12);
+    head.scale.set(1, 1.08, 0.95);
+    head.position.y = 0.15;
     rig.headG.add(head);
     // short pink hair
-    const hairCore = box(0.29, 0.13, 0.29, hairM);
-    hairCore.position.y = 0.3;
+    const hairCore = sph(0.16, hairM, 12, 10);
+    hairCore.scale.set(1.02, 0.72, 1.02);
+    hairCore.position.set(0, 0.29, -0.01);
     rig.headG.add(hairCore);
     const spikes = [
       [0.08, 0.38, 0.05, 0.06, 0.13, 0.35],
@@ -275,25 +302,31 @@
     const eyeR = sph(0.035, eyeM, 8, 6);
     eyeR.position.set(0.065, 0.16, 0.135);
     rig.headG.add(eyeR);
-    // face markings: lines under eyes + forehead
-    const mkL = box(0.07, 0.018, 0.02, tattoo);
-    mkL.position.set(-0.075, 0.09, 0.135);
+    // face markings: lines under eyes + cheeks, hugging the curved head
+    const mkL = box(0.06, 0.016, 0.014, tattoo);
+    mkL.position.set(-0.068, 0.1, 0.125);
+    mkL.rotation.y = -0.35;
     rig.headG.add(mkL);
-    const mkR = box(0.07, 0.018, 0.02, tattoo);
-    mkR.position.set(0.075, 0.09, 0.135);
+    const mkR = box(0.06, 0.016, 0.014, tattoo);
+    mkR.position.set(0.068, 0.1, 0.125);
+    mkR.rotation.y = 0.35;
     rig.headG.add(mkR);
-    const mkCheekL = box(0.02, 0.09, 0.02, tattoo);
-    mkCheekL.position.set(-0.115, 0.14, 0.13);
+    const mkCheekL = box(0.016, 0.085, 0.014, tattoo);
+    mkCheekL.position.set(-0.108, 0.15, 0.095);
+    mkCheekL.rotation.y = -0.7;
     rig.headG.add(mkCheekL);
-    const mkCheekR = box(0.02, 0.09, 0.02, tattoo);
-    mkCheekR.position.set(0.115, 0.14, 0.13);
+    const mkCheekR = box(0.016, 0.085, 0.014, tattoo);
+    mkCheekR.position.set(0.108, 0.15, 0.095);
+    mkCheekR.rotation.y = 0.7;
     rig.headG.add(mkCheekR);
     // second pair of eye markings on forehead (true form nod)
-    const fmkL = box(0.055, 0.016, 0.02, tattoo);
-    fmkL.position.set(-0.06, 0.245, 0.135);
+    const fmkL = box(0.05, 0.014, 0.014, tattoo);
+    fmkL.position.set(-0.055, 0.225, 0.115);
+    fmkL.rotation.x = -0.25;
     rig.headG.add(fmkL);
-    const fmkR = box(0.055, 0.016, 0.02, tattoo);
-    fmkR.position.set(0.06, 0.245, 0.135);
+    const fmkR = box(0.05, 0.014, 0.014, tattoo);
+    fmkR.position.set(0.055, 0.225, 0.115);
+    fmkR.rotation.x = -0.25;
     rig.headG.add(fmkR);
 
     rig.root.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
@@ -317,7 +350,10 @@
       j.rotation.z = lerpAngle(j.rotation.z, target[2], k);
     }
     rig.body.position.y = lerpAngle(rig.body.position.y, bodyY || 0, k);
-    rig.body.rotation.x = lerpAngle(rig.body.rotation.x, bodyRotX || 0, k);
+    // body pitch base is tracked separately so overlay leans can be applied
+    // absolutely on top (never additively into the lerp feedback loop)
+    rig.userData.baseRotX = lerpAngle(rig.userData.baseRotX || 0, bodyRotX || 0, k);
+    rig.body.rotation.x = rig.userData.baseRotX;
   }
 
   // idle poses differ per character
@@ -349,24 +385,25 @@
     };
   }
 
-  function runPose(t, speed, strafe) {
-    const f = t * 9.5;
+  function runPose(t, speed, strafe, back) {
+    const f = t * (back ? 7.5 : 9.5);
     const sn = Math.sin(f);
-    const s = sn * 0.75 * speed;
+    const amp = back ? 0.55 : 1;
+    const s = sn * 0.75 * speed * amp;
     return {
       pose: {
         legL: [s, 0, 0],
-        shinL: [Math.max(0, -sn) * 1.0 * speed, 0, 0],
+        shinL: [Math.max(0, -sn) * 1.0 * speed * amp, 0, 0],
         legR: [-s, 0, 0],
-        shinR: [Math.max(0, sn) * 1.0 * speed, 0, 0],
+        shinR: [Math.max(0, sn) * 1.0 * speed * amp, 0, 0],
         armL: [-s * 0.8, 0, 0.08],
-        foreL: [-0.5 - Math.max(0, sn) * 0.55 * speed, 0, 0],
+        foreL: [-0.5 - Math.max(0, sn) * 0.55 * speed * amp, 0, 0],
         armR: [s * 0.8, 0, -0.08],
-        foreR: [-0.5 - Math.max(0, -sn) * 0.55 * speed, 0, 0],
-        torsoG: [0.2 * speed, strafe * 0.18, -strafe * 0.12],
-        headG: [-0.1 + Math.abs(sn) * 0.05, 0, strafe * 0.06],
+        foreR: [-0.5 - Math.max(0, -sn) * 0.55 * speed * amp, 0, 0],
+        torsoG: [back ? -0.06 : 0.2 * speed, strafe * 0.18, -strafe * 0.12],
+        headG: [(back ? 0.02 : -0.1) + Math.abs(sn) * 0.05, 0, strafe * 0.06],
       },
-      bodyY: Math.abs(sn) * 0.05 * speed,
+      bodyY: Math.abs(sn) * 0.04 * speed * amp,
     };
   }
 
@@ -407,16 +444,23 @@
     dash: [[0, 'dash', 22]],
   };
 
-  // secondary motion layered on top of the posed skeleton
+  // secondary motion layered on top of the posed skeleton.
+  // Leans/tumble are SMOOTHED STATE applied absolutely each frame — additive
+  // writes here would integrate frame-over-frame and flip the model over.
   function overlays(f, rig, time, dt) {
+    const kk = Math.min(1, dt * 7);
     // breathing
     rig.torsoG.scale.y = 1 + Math.sin(time * 2.2 + f.animSeed * 3) * 0.013;
     // lean into velocity (converted to fighter-local axes)
     const fx = Math.sin(f.facing), fz = Math.cos(f.facing);
     const vf = f.vel.x * fx + f.vel.z * fz;
     const vs = f.vel.x * fz - f.vel.z * fx;
-    rig.body.rotation.x += Math.max(-0.15, Math.min(0.15, vf * 0.012));
-    rig.body.rotation.z += Math.max(-0.12, Math.min(0.12, -vs * 0.01));
+    const targetLX = Math.max(-0.13, Math.min(0.13, vf * 0.016)) + (f.animBack ? -0.04 : 0);
+    const targetLZ = Math.max(-0.1, Math.min(0.1, -vs * 0.012));
+    f.leanX = (f.leanX || 0) + (targetLX - (f.leanX || 0)) * kk;
+    f.leanZ = (f.leanZ || 0) + (targetLZ - (f.leanZ || 0)) * kk;
+    rig.body.rotation.x = (rig.userData.baseRotX || 0) + f.leanX;
+    rig.body.rotation.z = f.leanZ;
     // landing squash & stretch
     if (f.landT > 0) {
       f.landT -= dt;
@@ -427,10 +471,13 @@
     }
     // tumble when launched airborne
     if (!f.onGround && (f.state === 'hitstun' || f.state === 'knockdown')) {
-      rig.body.rotation.y += dt * 10;
+      f.tumble = (f.tumble || 0) + dt * 10;
     } else {
-      rig.body.rotation.y *= Math.max(0, 1 - dt * 8);
+      f.tumble = (f.tumble || 0) * Math.max(0, 1 - dt * 8);
     }
+    rig.body.rotation.y = f.tumble;
+    // impact shiver while in hitstun
+    if (f.state === 'hitstun') rig.torsoG.rotation.z += Math.sin(time * 45) * 0.035;
     // victory arm pump
     if (f.animName === 'victory') rig.armR.rotation.x += Math.sin(time * 7) * 0.07;
     // six eyes / king-of-curses glow flare
@@ -462,7 +509,7 @@
     } else {
       switch (f.animName) {
         case 'run': {
-          entry = runPose(time + f.animSeed, Math.min(1, f.animSpeed), f.animStrafe || 0);
+          entry = runPose(time + f.animSeed, Math.min(1, f.animSpeed), f.animStrafe || 0, f.animBack);
           break;
         }
         case 'idle':

@@ -552,6 +552,10 @@
       eyeGlow: 0,
       channeling: false,
       healSndT: 0,
+      leanX: 0,
+      leanZ: 0,
+      tumble: 0,
+      animBack: false,
       state: 'idle', // idle|dash|attack|skill|guard|hitstun|knockdown|stunned|domainCast|ko|win|repelled
       action: null,  // {name,t,dur,data}
       cds: { s1: 0, s2: 0, s3: 0 },
@@ -593,10 +597,15 @@
     f.onGround = true;
     f.facing = faceAngle;
     f.animName = 'idle';
+    f.leanX = 0;
+    f.leanZ = 0;
+    f.tumble = 0;
+    f.animBack = false;
     f.model.group.position.copy(f.pos);
     f.model.group.rotation.y = faceAngle;
     f.model.rig.body.rotation.set(0, 0, 0);
     f.model.rig.body.scale.set(1, 1, 1);
+    f.model.rig.userData.baseRotX = 0;
     if (f.ai) f.ai = makeAI(mode.difficulty);
   }
 
@@ -1458,6 +1467,7 @@
     // movement
     const moving = (inp.mx !== 0 || inp.mz !== 0);
     const freeMove = canAct(f) && !f.guarding && !f.channeling;
+    if (!(freeMove && moving)) f.animBack = false;
     if (freeMove && moving) {
       const fw = forwardOf(f);
       const right = tmpV.set(fw.z, 0, -fw.x).clone();
@@ -1469,6 +1479,7 @@
       f.state = f.onGround ? 'move' : f.state;
       f.animStrafe = inp.mx;
       f.animSpeed = 1;
+      f.animBack = inp.mz < 0;
     } else if (f.onGround) {
       f.vel.x *= Math.pow(0.0001, dt);
       f.vel.z *= Math.pow(0.0001, dt);
