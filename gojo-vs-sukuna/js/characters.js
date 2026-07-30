@@ -1,0 +1,420 @@
+/* ============================================================
+   CHARACTERS — procedural low-poly Gojo & Sukuna + animation
+   ============================================================ */
+(function () {
+  const CharFactory = {};
+
+  function mat(color, opts) {
+    opts = opts || {};
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      roughness: opts.roughness !== undefined ? opts.roughness : 0.85,
+      metalness: opts.metalness !== undefined ? opts.metalness : 0.0,
+      emissive: opts.emissive !== undefined ? opts.emissive : 0x000000,
+      emissiveIntensity: opts.emissiveIntensity !== undefined ? opts.emissiveIntensity : 1.0,
+      transparent: !!opts.transparent,
+      opacity: opts.opacity !== undefined ? opts.opacity : 1.0,
+    });
+  }
+
+  function box(w, h, d, material) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    m.castShadow = true;
+    return m;
+  }
+
+  function cyl(rt, rb, h, material, seg) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 8), material);
+    m.castShadow = true;
+    return m;
+  }
+
+  function sph(r, material, w, hseg) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(r, w || 10, hseg || 8), material);
+    m.castShadow = true;
+    return m;
+  }
+
+  function cone(r, h, material, seg) {
+    const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, seg || 6), material);
+    m.castShadow = true;
+    return m;
+  }
+
+  /* ---------- shared humanoid rig ----------
+     root
+       body (y offset so feet on ground; used for lean/crouch/knockdown)
+         hips (y=0.92)
+           legL / legR (pivot at hip)   -> shinL/shinR (pivot at knee)
+           torsoG (pivot at waist)
+             torso meshes
+             headG (pivot at neck)
+             armL / armR (pivot at shoulder) -> foreL/foreR (pivot at elbow)
+     Character faces +Z when root.rotation.y == 0.
+  ------------------------------------------- */
+  function buildRig() {
+    const root = new THREE.Group();
+    const body = new THREE.Group();
+    root.add(body);
+
+    const hips = new THREE.Group();
+    hips.position.y = 0.92;
+    body.add(hips);
+
+    const torsoG = new THREE.Group();
+    torsoG.position.y = 0.06;
+    hips.add(torsoG);
+
+    const headG = new THREE.Group();
+    headG.position.y = 0.62;
+    torsoG.add(headG);
+
+    const armL = new THREE.Group();
+    armL.position.set(-0.27, 0.52, 0);
+    torsoG.add(armL);
+    const foreL = new THREE.Group();
+    foreL.position.y = -0.30;
+    armL.add(foreL);
+
+    const armR = new THREE.Group();
+    armR.position.set(0.27, 0.52, 0);
+    torsoG.add(armR);
+    const foreR = new THREE.Group();
+    foreR.position.y = -0.30;
+    armR.add(foreR);
+
+    const legL = new THREE.Group();
+    legL.position.set(-0.12, 0, 0);
+    hips.add(legL);
+    const shinL = new THREE.Group();
+    shinL.position.y = -0.44;
+    legL.add(shinL);
+
+    const legR = new THREE.Group();
+    legR.position.set(0.12, 0, 0);
+    hips.add(legR);
+    const shinR = new THREE.Group();
+    shinR.position.y = -0.44;
+    legR.add(shinR);
+
+    return { root, body, hips, torsoG, headG, armL, foreL, armR, foreR, legL, shinL, legR, shinR };
+  }
+
+  function limbMeshes(rig, skinM, upperM, lowerM, shoeM, pantsUM, pantsLM) {
+    // arms
+    for (const side of ['L', 'R']) {
+      const arm = rig['arm' + side];
+      const fore = rig['fore' + side];
+      const upper = cyl(0.055, 0.065, 0.30, upperM);
+      upper.position.y = -0.15;
+      arm.add(upper);
+      const forearm = cyl(0.045, 0.055, 0.28, lowerM);
+      forearm.position.y = -0.14;
+      fore.add(forearm);
+      const hand = sph(0.06, skinM, 8, 6);
+      hand.position.y = -0.31;
+      fore.add(hand);
+      fore.userData.hand = hand;
+    }
+    // legs
+    for (const side of ['L', 'R']) {
+      const leg = rig['leg' + side];
+      const shin = rig['shin' + side];
+      const thigh = cyl(0.07, 0.08, 0.44, pantsUM);
+      thigh.position.y = -0.22;
+      leg.add(thigh);
+      const shinMesh = cyl(0.055, 0.07, 0.42, pantsLM);
+      shinMesh.position.y = -0.21;
+      shin.add(shinMesh);
+      const foot = box(0.11, 0.07, 0.24, shoeM);
+      foot.position.set(0, -0.435, 0.05);
+      shin.add(foot);
+    }
+  }
+
+  /* ============ GOJO ============ */
+  CharFactory.buildGojo = function () {
+    const rig = buildRig();
+    const skin = mat(0xe8c4a0);
+    const jacket = mat(0x161d30, { roughness: 0.7 });
+    const jacketDark = mat(0x0e1322);
+    const shoe = mat(0x0a0a0f);
+    const hairM = mat(0xf4f6fa, { roughness: 0.6 });
+    const eyeM = mat(0x37c8ff, { emissive: 0x37c8ff, emissiveIntensity: 2.2 });
+
+    limbMeshes(rig, skin, jacket, jacket, shoe, jacket, jacketDark);
+
+    // torso: dark high-collar jacket
+    const chest = box(0.46, 0.5, 0.26, jacket);
+    chest.position.y = 0.3;
+    rig.torsoG.add(chest);
+    const waist = box(0.4, 0.18, 0.24, jacketDark);
+    waist.position.y = 0.0;
+    rig.torsoG.add(waist);
+    // zipper line
+    const zip = box(0.02, 0.48, 0.015, mat(0x3a4a6b, { metalness: 0.6, roughness: 0.3 }));
+    zip.position.set(0, 0.3, 0.135);
+    rig.torsoG.add(zip);
+    // high collar
+    const collar = box(0.34, 0.14, 0.22, jacket);
+    collar.position.set(0, 0.58, -0.01);
+    rig.torsoG.add(collar);
+
+    // head
+    const head = box(0.26, 0.28, 0.26, skin);
+    head.position.y = 0.14;
+    rig.headG.add(head);
+    // white spiky hair
+    const hairCore = box(0.3, 0.16, 0.3, hairM);
+    hairCore.position.y = 0.3;
+    rig.headG.add(hairCore);
+    const spikes = [
+      [0, 0.42, 0, 0.09, 0.22, 0],
+      [0.1, 0.4, 0.06, 0.07, 0.2, 0.3],
+      [-0.1, 0.4, 0.06, 0.07, 0.2, -0.3],
+      [0.09, 0.4, -0.08, 0.07, 0.18, 0.5],
+      [-0.09, 0.4, -0.08, 0.07, 0.18, -0.5],
+      [0, 0.4, 0.1, 0.07, 0.18, 0.15],
+      [0, 0.38, -0.12, 0.08, 0.2, -0.2],
+    ];
+    for (const s of spikes) {
+      const sp = cone(s[3], s[4], hairM);
+      sp.position.set(s[0], s[1], s[2]);
+      sp.rotation.z = s[5];
+      sp.rotation.x = (s[2] > 0 ? 0.25 : -0.2);
+      rig.headG.add(sp);
+    }
+    // Six Eyes — bright cyan
+    const eyeL = sph(0.035, eyeM, 8, 6);
+    eyeL.position.set(-0.065, 0.16, 0.135);
+    rig.headG.add(eyeL);
+    const eyeR = sph(0.035, eyeM, 8, 6);
+    eyeR.position.set(0.065, 0.16, 0.135);
+    rig.headG.add(eyeR);
+
+    rig.root.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+    return { rig: rig, group: rig.root, eyes: [eyeL, eyeR] };
+  };
+
+  /* ============ SUKUNA ============ */
+  CharFactory.buildSukuna = function () {
+    const rig = buildRig();
+    const skin = mat(0xd9a172);
+    const tattoo = mat(0x1c1c1c, { roughness: 0.9 });
+    const pantsM = mat(0xe6ddc4, { roughness: 0.9 });
+    const hemM = mat(0x22201c);
+    const shoe = mat(0x2a2118);
+    const hairM = mat(0xd9808f, { roughness: 0.65 });
+    const eyeM = mat(0xff4422, { emissive: 0xff3311, emissiveIntensity: 2.2 });
+
+    limbMeshes(rig, skin, skin, skin, shoe, pantsM, pantsM);
+
+    // tattoo rings on arms
+    for (const side of ['L', 'R']) {
+      const armRing = cyl(0.062, 0.062, 0.05, tattoo);
+      armRing.position.y = -0.1;
+      rig['arm' + side].add(armRing);
+      const foreRing = cyl(0.052, 0.052, 0.045, tattoo);
+      foreRing.position.y = -0.12;
+      rig['fore' + side].add(foreRing);
+    }
+
+    // bare muscular torso
+    const chest = box(0.48, 0.32, 0.27, skin);
+    chest.position.y = 0.4;
+    rig.torsoG.add(chest);
+    const abs = box(0.4, 0.28, 0.24, skin);
+    abs.position.y = 0.12;
+    rig.torsoG.add(abs);
+    // chest tattoo lines
+    const tLine1 = box(0.5, 0.035, 0.02, tattoo);
+    tLine1.position.set(0, 0.46, 0.145);
+    rig.torsoG.add(tLine1);
+    const tLine2 = box(0.42, 0.03, 0.02, tattoo);
+    tLine2.position.set(0, 0.2, 0.13);
+    rig.torsoG.add(tLine2);
+    // belly band + rope belt
+    const belt = box(0.42, 0.12, 0.26, mat(0xcbb9a2));
+    belt.position.y = -0.03;
+    rig.torsoG.add(belt);
+    const rope = box(0.44, 0.045, 0.28, mat(0x6b5a3e));
+    rope.position.y = -0.03;
+    rig.torsoG.add(rope);
+    // hakama hem marks
+    for (const side of ['L', 'R']) {
+      const hem = cyl(0.072, 0.072, 0.06, hemM);
+      hem.position.y = -0.38;
+      rig['shin' + side].add(hem);
+    }
+
+    // head
+    const head = box(0.26, 0.28, 0.26, skin);
+    head.position.y = 0.14;
+    rig.headG.add(head);
+    // short pink hair
+    const hairCore = box(0.29, 0.13, 0.29, hairM);
+    hairCore.position.y = 0.3;
+    rig.headG.add(hairCore);
+    const spikes = [
+      [0.08, 0.38, 0.05, 0.06, 0.13, 0.35],
+      [-0.08, 0.38, 0.05, 0.06, 0.13, -0.35],
+      [0, 0.39, -0.04, 0.07, 0.14, 0],
+      [0.1, 0.36, -0.09, 0.06, 0.12, 0.55],
+      [-0.1, 0.36, -0.09, 0.06, 0.12, -0.55],
+    ];
+    for (const s of spikes) {
+      const sp = cone(s[3], s[4], hairM);
+      sp.position.set(s[0], s[1], s[2]);
+      sp.rotation.z = s[5];
+      rig.headG.add(sp);
+    }
+    // eyes (red)
+    const eyeL = sph(0.035, eyeM, 8, 6);
+    eyeL.position.set(-0.065, 0.16, 0.135);
+    rig.headG.add(eyeL);
+    const eyeR = sph(0.035, eyeM, 8, 6);
+    eyeR.position.set(0.065, 0.16, 0.135);
+    rig.headG.add(eyeR);
+    // face markings: lines under eyes + forehead
+    const mkL = box(0.07, 0.018, 0.02, tattoo);
+    mkL.position.set(-0.075, 0.09, 0.135);
+    rig.headG.add(mkL);
+    const mkR = box(0.07, 0.018, 0.02, tattoo);
+    mkR.position.set(0.075, 0.09, 0.135);
+    rig.headG.add(mkR);
+    const mkCheekL = box(0.02, 0.09, 0.02, tattoo);
+    mkCheekL.position.set(-0.115, 0.14, 0.13);
+    rig.headG.add(mkCheekL);
+    const mkCheekR = box(0.02, 0.09, 0.02, tattoo);
+    mkCheekR.position.set(0.115, 0.14, 0.13);
+    rig.headG.add(mkCheekR);
+    // second pair of eye markings on forehead (true form nod)
+    const fmkL = box(0.055, 0.016, 0.02, tattoo);
+    fmkL.position.set(-0.06, 0.245, 0.135);
+    rig.headG.add(fmkL);
+    const fmkR = box(0.055, 0.016, 0.02, tattoo);
+    fmkR.position.set(0.06, 0.245, 0.135);
+    rig.headG.add(fmkR);
+
+    rig.root.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+    return { rig: rig, group: rig.root, eyes: [eyeL, eyeR] };
+  };
+
+  /* ============ ANIMATION ============ */
+  // Poses map joint name -> [x, y, z] euler targets (radians).
+  // Joints: body(pos y via _bodyY, rot), hips, torsoG, headG, armL, foreL, armR, foreR, legL, shinL, legR, shinR
+  const ZERO = [0, 0, 0];
+
+  function lerpAngle(a, b, k) { return a + (b - a) * k; }
+
+  function applyPose(rig, pose, k, bodyY, bodyRotX) {
+    const names = ['torsoG', 'headG', 'armL', 'foreL', 'armR', 'foreR', 'legL', 'shinL', 'legR', 'shinR'];
+    for (const n of names) {
+      const target = pose[n] || ZERO;
+      const j = rig[n];
+      j.rotation.x = lerpAngle(j.rotation.x, target[0], k);
+      j.rotation.y = lerpAngle(j.rotation.y, target[1], k);
+      j.rotation.z = lerpAngle(j.rotation.z, target[2], k);
+    }
+    rig.body.position.y = lerpAngle(rig.body.position.y, bodyY || 0, k);
+    rig.body.rotation.x = lerpAngle(rig.body.rotation.x, bodyRotX || 0, k);
+  }
+
+  // idle poses differ per character
+  function idlePose(charKey, t) {
+    const sway = Math.sin(t * 1.8) * 0.03;
+    if (charKey === 'gojo') {
+      return {
+        pose: {
+          armL: [0.08 + sway, 0, 0.12],
+          foreL: [-0.25, 0, 0],
+          armR: [0.08 - sway, 0, -0.12],
+          foreR: [-0.25, 0, 0],
+          headG: [0, Math.sin(t * 0.7) * 0.08, 0],
+          torsoG: [0.02, 0, 0],
+        },
+        bodyY: Math.sin(t * 2.2) * 0.015,
+      };
+    }
+    return {
+      pose: {
+        armL: [0.25 + sway, 0, 0.35],
+        foreL: [-0.6, 0, 0],
+        armR: [0.25 - sway, 0, -0.35],
+        foreR: [-0.6, 0, 0],
+        headG: [0.05, Math.sin(t * 0.6) * 0.1, 0],
+        torsoG: [0.06, 0, 0],
+      },
+      bodyY: Math.sin(t * 2.2) * 0.015,
+    };
+  }
+
+  function runPose(t, speed, strafe) {
+    const f = t * 9;
+    const s = Math.sin(f) * 0.7 * speed;
+    return {
+      pose: {
+        legL: [s, 0, 0],
+        shinL: [Math.max(0, -Math.sin(f)) * 0.9 * speed, 0, 0],
+        legR: [-s, 0, 0],
+        shinR: [Math.max(0, Math.sin(f)) * 0.9 * speed, 0, 0],
+        armL: [-s * 0.7, 0, 0.08],
+        foreL: [-0.5, 0, 0],
+        armR: [s * 0.7, 0, -0.08],
+        foreR: [-0.5, 0, 0],
+        torsoG: [0.18 * speed, strafe * 0.15, -strafe * 0.1],
+        headG: [-0.08, 0, 0],
+      },
+      bodyY: Math.abs(Math.sin(f)) * 0.04 * speed,
+    };
+  }
+
+  const POSES = {
+    jump: { pose: { legL: [-0.5, 0, 0], shinL: [1.1, 0, 0], legR: [-0.3, 0, 0], shinR: [0.8, 0, 0], armL: [-0.6, 0, 0.4], armR: [-0.6, 0, -0.4], torsoG: [0.1, 0, 0] }, bodyY: 0 },
+    dash: { pose: { torsoG: [0.5, 0, 0], headG: [-0.3, 0, 0], armL: [0.9, 0, 0.2], armR: [0.9, 0, -0.2], legL: [-0.4, 0, 0], legR: [0.5, 0, 0], shinR: [0.6, 0, 0] }, bodyY: -0.08 },
+    light1: { pose: { armR: [-1.55, 0, -0.05], foreR: [-0.1, 0, 0], armL: [0.3, 0, 0.3], foreL: [-1.2, 0, 0], torsoG: [0.15, -0.5, 0], headG: [0, 0.3, 0] }, bodyY: 0 },
+    light2: { pose: { armL: [-1.55, 0, 0.05], foreL: [-0.1, 0, 0], armR: [0.3, 0, -0.3], foreR: [-1.2, 0, 0], torsoG: [0.15, 0.5, 0], headG: [0, -0.3, 0] }, bodyY: 0 },
+    light3: { pose: { legR: [-1.5, 0, -0.15], shinR: [0.25, 0, 0], legL: [0.15, 0, 0], torsoG: [-0.25, 0.35, 0], armL: [-0.5, 0, 0.5], armR: [0.4, 0, -0.6] }, bodyY: 0.03 },
+    heavy: { pose: { armR: [-2.6, 0, -0.3], foreR: [-0.35, 0, 0], armL: [0.5, 0, 0.4], foreL: [-0.9, 0, 0], torsoG: [-0.25, -0.35, 0], legL: [0.2, 0, 0], legR: [-0.2, 0, 0] }, bodyY: 0.02 },
+    heavyHit: { pose: { armR: [-0.9, 0, -0.1], foreR: [-0.05, 0, 0], armL: [0.4, 0, 0.3], foreL: [-0.8, 0, 0], torsoG: [0.45, -0.2, 0], legL: [-0.3, 0, 0], legR: [0.35, 0, 0], shinR: [0.4, 0, 0] }, bodyY: -0.05 },
+    guard: { pose: { armL: [-0.9, 0, 0.9], foreL: [-1.5, 0, 0], armR: [-0.9, 0, -0.9], foreR: [-1.5, 0, 0], torsoG: [0.18, 0, 0], headG: [0.15, 0, 0], legL: [0.15, 0, 0], legR: [-0.15, 0, 0] }, bodyY: -0.06 },
+    infinity: { pose: { armR: [-1.2, 0, -0.35], foreR: [-0.45, 0, 0], armL: [0.1, 0, 0.15], foreL: [-0.3, 0, 0], torsoG: [0.04, -0.15, 0], headG: [0.02, 0.1, 0] }, bodyY: 0 },
+    castForward: { pose: { armR: [-1.5, 0, -0.12], foreR: [-0.15, 0, 0], armL: [-0.7, 0, 0.35], foreL: [-1.15, 0, 0], torsoG: [0.1, -0.35, 0] }, bodyY: 0 },
+    castCharge: { pose: { armR: [-1.15, 0, -0.55], foreR: [-0.7, 0, 0], armL: [-1.15, 0, 0.55], foreL: [-0.7, 0, 0], torsoG: [0.12, 0, 0], headG: [0.08, 0, 0] }, bodyY: -0.03 },
+    slashR: { pose: { armR: [-1.3, 0, -1.2], foreR: [-0.15, 0, 0], armL: [0.35, 0, 0.4], torsoG: [0.1, -0.7, 0], headG: [0, 0.4, 0] }, bodyY: 0 },
+    slashL: { pose: { armL: [-1.3, 0, 1.2], foreL: [-0.15, 0, 0], armR: [0.35, 0, -0.4], torsoG: [0.1, 0.7, 0], headG: [0, -0.4, 0] }, bodyY: 0 },
+    bowDraw: { pose: { armL: [-1.5, 0, 0.05], foreL: [-0.1, 0, 0], armR: [-1.25, 0, -0.9], foreR: [-1.3, 0, 0], torsoG: [0.05, 0.5, 0], headG: [0, -0.5, 0] }, bodyY: 0 },
+    domainSign: { pose: { armL: [-1.05, 0, 0.75], foreL: [-1.35, 0, 0.25], armR: [-1.05, 0, -0.75], foreR: [-1.35, 0, -0.25], torsoG: [0.1, 0, 0], headG: [0.28, 0, 0] }, bodyY: -0.04 },
+    hitstun: { pose: { torsoG: [-0.35, 0.15, 0], headG: [-0.3, 0, 0], armL: [-0.7, 0, 0.7], foreL: [-0.6, 0, 0], armR: [-0.7, 0, -0.7], foreR: [-0.6, 0, 0], legL: [0.25, 0, 0], legR: [-0.35, 0, 0] }, bodyY: 0 },
+    stunned: { pose: { torsoG: [0.3, 0, 0.08], headG: [0.45, 0.25, 0.15], armL: [0.35, 0, 0.25], foreL: [-0.15, 0, 0], armR: [0.35, 0, -0.25], foreR: [-0.15, 0, 0], legL: [0.1, 0, 0], legR: [-0.1, 0, 0] }, bodyY: -0.1 },
+    knockdown: { pose: { armL: [-2.6, 0, 0.4], armR: [-2.6, 0, -0.4], legL: [-0.25, 0, 0], legR: [-0.4, 0, 0], shinL: [0.3, 0, 0], shinR: [0.5, 0, 0], headG: [-0.4, 0, 0] }, bodyY: 0, bodyRotX: -1.45 },
+    victory: { pose: { armR: [-2.9, 0, -0.25], foreR: [-0.2, 0, 0], armL: [0.1, 0, 0.15], torsoG: [-0.08, 0, 0], headG: [-0.2, 0, 0] }, bodyY: 0 },
+  };
+
+  // f: fighter object from game.js
+  CharFactory.animateFighter = function (f, time, dt) {
+    const rig = f.model.rig;
+    const k = Math.min(1, dt * 14);
+    let entry = null;
+    let bodyRotX = 0;
+
+    switch (f.animName) {
+      case 'run': {
+        entry = runPose(time + f.animSeed, Math.min(1, f.animSpeed), f.animStrafe || 0);
+        break;
+      }
+      case 'idle':
+        entry = idlePose(f.charKey, time + f.animSeed);
+        break;
+      default: {
+        const p = POSES[f.animName] || idlePose(f.charKey, time + f.animSeed);
+        entry = p.pose ? p : idlePose(f.charKey, time + f.animSeed);
+        if (p.bodyRotX) bodyRotX = p.bodyRotX;
+        break;
+      }
+    }
+    applyPose(rig, entry.pose, k, entry.bodyY || 0, bodyRotX);
+  };
+
+  window.CharFactory = CharFactory;
+})();
