@@ -88,7 +88,7 @@
   [P1MAP, P2MAP].forEach(m => Object.keys(m).forEach(k => GAME_CODES.add(m[k])));
 
   window.addEventListener('keydown', function (e) {
-    if (GAME_CODES.has(e.code) && (gameState === 'fight' || gameState === 'intro')) e.preventDefault();
+    if (GAME_CODES.has(e.code) && gameState !== 'menu' && gameState !== 'select') e.preventDefault();
     if (!held.has(e.code)) pressed.add(e.code);
     held.add(e.code);
     AudioSys.unlock();
@@ -1188,6 +1188,7 @@
 
   /* ================= DOMAINS ================= */
   function activateDomain(f) {
+    if (gameState !== 'fight') return;
     if (domain && domain.owner !== f) { resolveClash(f); return; }
     const key = f.charKey === 'gojo' ? 'void' : 'shrine';
     domain = { owner: f, key: key, t: 0, dur: 6.5, tick: 0, center: f.pos.clone() };
@@ -1288,8 +1289,8 @@
     if (domain.key === 'void') {
       arena.voidSphere.rotation.y += dt * 0.05;
       arena.voidSphere.rotation.z += dt * 0.02;
-      // victim overwhelmed by infinite information
-      if (victim.state !== 'ko' && victim.state !== 'knockdown') {
+      // victim overwhelmed by infinite information (an armored counter domain-cast resists)
+      if (victim.state !== 'ko' && victim.state !== 'knockdown' && !(victim.action && victim.action.data && victim.action.data.armor)) {
         victim.state = 'stunned';
         victim.stunT = 0.4;
         victim.action = null;
@@ -1319,6 +1320,7 @@
       }
     }
 
+    if (!domain) return; // a DoT tick KO'd the victim: koFighter already ended the domain
     if (domain.t >= domain.dur || owner.state === 'ko') {
       endDomain();
       if (owner.state !== 'ko') announce('DOMAIN COLLAPSES', '', 1.0, 'sub');
@@ -1797,6 +1799,13 @@
   function timeOutRound() {
     const a = fighters[0], b = fighters[1];
     const winner = a.hp >= b.hp ? a : b;
+    const loser = opponentOf(winner);
+    endDomain();
+    winner.action = null;
+    loser.action = null;
+    winner.aura = 0;
+    loser.aura = 0;
+    if (loser.state !== 'ko') loser.state = 'idle';
     gameState = 'roundEnd';
     roundEndT = 3.0;
     wins[winner.idx]++;
@@ -1857,7 +1866,8 @@
     $('btn-menu').addEventListener('click', backToMenu);
     $('btn-resume').addEventListener('click', togglePause);
     $('btn-quit').addEventListener('click', function () { paused = false; ui.pause.classList.add('hidden'); backToMenu(); });
-    ui.muteBtn.addEventListener('click', function () { const m = AudioSys.toggleMute(); ui.muteBtn.textContent = m ? '🔇' : '🔊'; });
+    ui.muteBtn.addEventListener('mousedown', function (e) { e.preventDefault(); }); // never steal keyboard focus
+    ui.muteBtn.addEventListener('click', function () { const m = AudioSys.toggleMute(); ui.muteBtn.textContent = m ? '🔇' : '🔊'; ui.muteBtn.blur(); });
     document.addEventListener('pointerdown', function () { AudioSys.unlock(); }, { once: true });
   }
 
