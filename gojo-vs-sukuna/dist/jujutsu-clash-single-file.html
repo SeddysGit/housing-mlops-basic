@@ -63,7 +63,7 @@
   .side.right .ce-bar { transform: scaleX(-1); align-self: flex-end; }
   .ce-fill { position: absolute; inset: 0; background: linear-gradient(90deg, #3f7dff, #9fd4ff); }
   .ce-fill.full { background: linear-gradient(90deg, #b16bff, #ffd76b); box-shadow: 0 0 12px rgba(200,140,255,0.9); }
-  .ce-mark { position: absolute; left: 66.6%; top: -1px; bottom: -1px; width: 2px; background: rgba(255,215,107,0.85); }
+  .ce-mark { position: absolute; left: 40%; top: -1px; bottom: -1px; width: 2px; background: rgba(255,215,107,0.85); }
   .guard-label { font-size: 10px; letter-spacing: 0.2em; color: #8b96b8; margin-top: 3px; text-transform: uppercase; }
   .pips { display: flex; gap: 6px; margin-top: 6px; }
   .pip { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(200,210,255,0.5); background: rgba(20,24,44,0.7); }
@@ -1066,9 +1066,9 @@
   const GRAVITY = -34;
   const WALK_SPEED = 6.4;
   const MAX_HP = 1000;
-  const MAX_CE = 150;       // deeper cursed-energy reserves
-  const DOMAIN_COST = 100;  // domain needs 100, leaving a usable surplus
-  const START_CE = 75;
+  const MAX_CE = 250;       // massive cursed-energy reserves
+  const DOMAIN_COST = 100;  // domain needs 100, leaving a big usable surplus
+  const START_CE = 125;
   const ROUND_TIME = 99;
   const WINS_NEEDED = 2;
   const BLACK_FLASH_CHANCE = 0.12;
@@ -2415,7 +2415,7 @@
     f.invulnT = Math.max(0, f.invulnT - dt);
     f.stunT = Math.max(0, f.stunT - dt);
     if (f.state === 'stunned' && f.stunT <= 0) f.state = 'idle';
-    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 6 * dt);
+    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 8 * dt);
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt * 6);
     f.eyeGlow = Math.max(0, f.eyeGlow - dt * 1.4);
 

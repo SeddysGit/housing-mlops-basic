@@ -52,9 +52,9 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
   the red ring. No shelter — run for the edge or eat the storm.
 
 **Shared mechanics**
-- **Cursed Energy (CE)**: a deep 150-point reserve that regenerates over time and builds
-  faster by landing/taking hits. Skills cost CE; pushing past the **gold mark (100)**
-  unlocks your Domain Expansion — with reserve to spare.
+- **Cursed Energy (CE)**: a massive 250-point reserve that regenerates over time and
+  builds faster by landing/taking hits. Skills cost CE; pushing past the **gold mark
+  (100)** unlocks your Domain Expansion — with a huge reserve to spare.
 - **Reverse Cursed Technique**: hold the heal key to channel CE into health. You're
   rooted and vulnerable while channeling — any hit interrupts it.
 - **Black Flash**: every melee hit has a chance to spark a Black Flash — 2.5× damage,

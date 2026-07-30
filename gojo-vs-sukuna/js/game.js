@@ -10,9 +10,9 @@
   const GRAVITY = -34;
   const WALK_SPEED = 6.4;
   const MAX_HP = 1000;
-  const MAX_CE = 150;       // deeper cursed-energy reserves
-  const DOMAIN_COST = 100;  // domain needs 100, leaving a usable surplus
-  const START_CE = 75;
+  const MAX_CE = 250;       // massive cursed-energy reserves
+  const DOMAIN_COST = 100;  // domain needs 100, leaving a big usable surplus
+  const START_CE = 125;
   const ROUND_TIME = 99;
   const WINS_NEEDED = 2;
   const BLACK_FLASH_CHANCE = 0.12;
@@ -1359,7 +1359,7 @@
     f.invulnT = Math.max(0, f.invulnT - dt);
     f.stunT = Math.max(0, f.stunT - dt);
     if (f.state === 'stunned' && f.stunT <= 0) f.state = 'idle';
-    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 6 * dt);
+    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 8 * dt);
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt * 6);
     f.eyeGlow = Math.max(0, f.eyeGlow - dt * 1.4);
 
