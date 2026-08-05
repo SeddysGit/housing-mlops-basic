@@ -27,12 +27,20 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
 | Skill 1 | `U` | `;` |
 | Skill 2 | `I` | `'` |
 | Skill 3 | `O` | `]` |
+| Skill 4 (Sukuna: Piercing Blood) | `Y` | `\` |
 | **Reverse Cursed Technique** (heal) | hold `N` | hold `[` |
 | **Domain Expansion** | `P` | `Enter` |
 
 `H` controls help · `M` mute · `Esc` pause · `R` rematch on the result screen.
 
 ## The kits
+
+**Technique fusions**
+- **Gojo**: cast **Blue then Red** (either order) within 3 seconds while both are live —
+  they converge and detonate into a free, oversized **Hollow Purple**.
+- **Sukuna**: cast **Dismantle then Cleave** (either order) within 3 seconds — the
+  **World Cutting Slash** telegraphs a red line across the arena, then splits the world
+  along it. Dash off the line to survive.
 
 **Gojo — Limitless & Six Eyes**
 - **Infinity** (hold guard): nothing reaches you — melee is halted, projectiles dissolve.
@@ -48,15 +56,19 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
 - **Dismantle** — a fan of three ranged slash waves.
 - **Cleave** — up close: blink behind the target and flurry-slash; at range: one big slash wave.
 - **Fire Arrow** — "Open." A fast flame arrow with an explosive blast radius.
+- **Piercing Blood** — Blood Manipulation: a hypersonic blood beam that leaves the
+  target bleeding (`Y`).
 - **Domain: Malevolent Shrine** — a barrierless domain: slashes rain on everything inside
   the red ring. No shelter — run for the edge or eat the storm.
 
 **Shared mechanics**
-- **Cursed Energy (CE)**: a massive 250-point reserve that regenerates over time and
-  builds faster by landing/taking hits. Skills cost CE; pushing past the **gold mark
-  (100)** unlocks your Domain Expansion — with a huge reserve to spare.
-- **Reverse Cursed Technique**: hold the heal key to channel CE into health. You're
-  rooted and vulnerable while channeling — any hit interrupts it.
+- **Cursed Energy (CE)**: a colossal 2000-point reserve (20× the original) with fast
+  regeneration. Skills cost CE; the **gold mark (100)** unlocks your Domain Expansion.
+- **Simple Domain**: hold guard while caught inside the enemy's Domain to project a
+  barrier that negates the sure-hit (Void's stun, the Shrine's slashes) — for a steady
+  CE price.
+- **Reverse Cursed Technique**: hold the heal key to channel CE into health (~150 HP/s).
+  You're rooted and vulnerable while channeling — any hit interrupts it.
 - **Black Flash**: every melee hit has a chance to spark a Black Flash — 2.5× damage,
   time briefly distorts, and you gain bonus CE.
 - **Domain Clash**: expand your domain while the enemy's is up (or mid-cast) and the

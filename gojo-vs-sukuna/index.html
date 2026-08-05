@@ -94,6 +94,8 @@
   #announce.shrine .announce-main { color: #ff5540; text-shadow: 0 0 44px rgba(255,60,30,1); }
   #announce.shrine #announce-sub { color: #ffb0a0; }
   #announce.clash .announce-main { background: linear-gradient(90deg, #4fd4ff, #ff5540); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 30px rgba(255,255,255,0.6)); }
+  #announce.purple .announce-main { background: linear-gradient(90deg, #4fd4ff, #a22cff, #ff3344); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 34px rgba(170,60,255,0.9)); }
+  #announce.purple #announce-sub { color: #d9b8ff; }
   @keyframes pop { 0% { transform: scale(1.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
   #flash { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; }
@@ -145,7 +147,9 @@
           <li><b>Lapse: Blue</b> — vortex that drags the enemy in<span>U</span></li>
           <li><b>Reversal: Red</b> — repulsive blast, huge knockback<span>I</span></li>
           <li><b>Hollow Purple</b> — charge, then erase everything ahead<span>O</span></li>
+          <li><b>Fusion</b> — Blue + Red within 3s detonate into Purple<span>U→I</span></li>
           <li><b>Domain: Unlimited Void</b> — stun in infinite information<span>P</span></li>
+          <li><b>Simple Domain</b> — guard inside an enemy domain<span>hold L</span></li>
           <li><b>Reverse Cursed Technique</b> — channel CE into healing<span>hold N</span></li>
           <li><b>Black Flash</b> — chance on melee hits, 2.5× damage<span>auto</span></li>
         </ul>
@@ -158,7 +162,10 @@
           <li><b>Dismantle</b> — fan of ranged slash waves<span>U</span></li>
           <li><b>Cleave</b> — blink flurry up close, big slash at range<span>I</span></li>
           <li><b>Fire Arrow</b> — “Open.” Explosive flame shot<span>O</span></li>
+          <li><b>Piercing Blood</b> — hypersonic blood beam, leaves a bleed<span>Y</span></li>
+          <li><b>World Cutting Slash</b> — Dismantle + Cleave within 3s<span>U→I</span></li>
           <li><b>Domain: Malevolent Shrine</b> — slashes rain, no shelter<span>P</span></li>
+          <li><b>Simple Domain</b> — guard inside an enemy domain<span>hold L</span></li>
           <li><b>Reverse Cursed Technique</b> — channel CE into healing<span>hold N</span></li>
           <li><b>Black Flash</b> — chance on melee hits, 2.5× damage<span>auto</span></li>
         </ul>
@@ -196,9 +203,10 @@
 
   <!-- HELP -->
   <div id="help" class="hidden">
-    <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O skills · N heal (RCT) · P Domain<br>
-    <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] skills · [ heal · Enter Domain<br>
-    Land melee hits for a chance at <b>BLACK FLASH</b> · CE past the gold mark unleashes your <b>DOMAIN EXPANSION</b> · Hold heal to channel <b>REVERSE CURSED TECHNIQUE</b>
+    <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O/Y skills · N heal (RCT) · P Domain<br>
+    <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] \ skills · [ heal · Enter Domain<br>
+    <b>FUSIONS</b>: Gojo — Blue then Red fast = <b>HOLLOW PURPLE</b> · Sukuna — Dismantle then Cleave fast = <b>WORLD CUTTING SLASH</b><br>
+    Hold <b>guard inside an enemy Domain</b> to raise a <b>SIMPLE DOMAIN</b> (drains CE, negates the sure-hit) · Melee can spark <b>BLACK FLASH</b> · Hold heal for <b>REVERSE CURSED TECHNIQUE</b>
   </div>
 
   <!-- RESULT -->

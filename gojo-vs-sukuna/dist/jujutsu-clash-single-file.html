@@ -96,6 +96,8 @@
   #announce.shrine .announce-main { color: #ff5540; text-shadow: 0 0 44px rgba(255,60,30,1); }
   #announce.shrine #announce-sub { color: #ffb0a0; }
   #announce.clash .announce-main { background: linear-gradient(90deg, #4fd4ff, #ff5540); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 30px rgba(255,255,255,0.6)); }
+  #announce.purple .announce-main { background: linear-gradient(90deg, #4fd4ff, #a22cff, #ff3344); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 34px rgba(170,60,255,0.9)); }
+  #announce.purple #announce-sub { color: #d9b8ff; }
   @keyframes pop { 0% { transform: scale(1.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
   #flash { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; }
@@ -146,7 +148,9 @@
           <li><b>Lapse: Blue</b> — vortex that drags the enemy in<span>U</span></li>
           <li><b>Reversal: Red</b> — repulsive blast, huge knockback<span>I</span></li>
           <li><b>Hollow Purple</b> — charge, then erase everything ahead<span>O</span></li>
+          <li><b>Fusion</b> — Blue + Red within 3s detonate into Purple<span>U→I</span></li>
           <li><b>Domain: Unlimited Void</b> — stun in infinite information<span>P</span></li>
+          <li><b>Simple Domain</b> — guard inside an enemy domain<span>hold L</span></li>
           <li><b>Reverse Cursed Technique</b> — channel CE into healing<span>hold N</span></li>
           <li><b>Black Flash</b> — chance on melee hits, 2.5× damage<span>auto</span></li>
         </ul>
@@ -159,7 +163,10 @@
           <li><b>Dismantle</b> — fan of ranged slash waves<span>U</span></li>
           <li><b>Cleave</b> — blink flurry up close, big slash at range<span>I</span></li>
           <li><b>Fire Arrow</b> — “Open.” Explosive flame shot<span>O</span></li>
+          <li><b>Piercing Blood</b> — hypersonic blood beam, leaves a bleed<span>Y</span></li>
+          <li><b>World Cutting Slash</b> — Dismantle + Cleave within 3s<span>U→I</span></li>
           <li><b>Domain: Malevolent Shrine</b> — slashes rain, no shelter<span>P</span></li>
+          <li><b>Simple Domain</b> — guard inside an enemy domain<span>hold L</span></li>
           <li><b>Reverse Cursed Technique</b> — channel CE into healing<span>hold N</span></li>
           <li><b>Black Flash</b> — chance on melee hits, 2.5× damage<span>auto</span></li>
         </ul>
@@ -197,9 +204,10 @@
 
   <!-- HELP -->
   <div id="help" class="hidden">
-    <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O skills · N heal (RCT) · P Domain<br>
-    <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] skills · [ heal · Enter Domain<br>
-    Land melee hits for a chance at <b>BLACK FLASH</b> · CE past the gold mark unleashes your <b>DOMAIN EXPANSION</b> · Hold heal to channel <b>REVERSE CURSED TECHNIQUE</b>
+    <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O/Y skills · N heal (RCT) · P Domain<br>
+    <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] \ skills · [ heal · Enter Domain<br>
+    <b>FUSIONS</b>: Gojo — Blue then Red fast = <b>HOLLOW PURPLE</b> · Sukuna — Dismantle then Cleave fast = <b>WORLD CUTTING SLASH</b><br>
+    Hold <b>guard inside an enemy Domain</b> to raise a <b>SIMPLE DOMAIN</b> (drains CE, negates the sure-hit) · Melee can spark <b>BLACK FLASH</b> · Hold heal for <b>REVERSE CURSED TECHNIQUE</b>
   </div>
 
   <!-- RESULT -->
@@ -1066,9 +1074,10 @@
   const GRAVITY = -34;
   const WALK_SPEED = 6.4;
   const MAX_HP = 1000;
-  const MAX_CE = 250;       // massive cursed-energy reserves
-  const DOMAIN_COST = 100;  // domain needs 100, leaving a big usable surplus
-  const START_CE = 125;
+  const MAX_CE = 2000;      // 20x the original reserves — power fantasy mode
+  const DOMAIN_COST = 100;  // domain needs 100, leaving an enormous surplus
+  const START_CE = 1000;
+  const FUSION_WINDOW = 3.0; // seconds to chain Blue+Red / Dismantle+Cleave
   const ROUND_TIME = 99;
   const WINS_NEEDED = 2;
   const BLACK_FLASH_CHANCE = 0.12;
@@ -1095,6 +1104,7 @@
         s1: { name: 'Dismantle', ce: 15, cd: 3 },
         s2: { name: 'Cleave', ce: 25, cd: 8 },
         s3: { name: 'Fire Arrow', ce: 40, cd: 18 },
+        s4: { name: 'Piercing Blood', ce: 30, cd: 9 },
         dom: { name: 'Malevolent Shrine', ce: 100 },
       },
     },
@@ -1139,8 +1149,8 @@
   const held = new Set();
   const pressed = new Set();
 
-  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', dom: 'KeyP', rct: 'KeyN' };
-  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', dom: 'Enter', rct: 'BracketLeft' };
+  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', s4: 'KeyY', dom: 'KeyP', rct: 'KeyN' };
+  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', s4: 'Backslash', dom: 'Enter', rct: 'BracketLeft' };
 
   const GAME_CODES = new Set();
   [P1MAP, P2MAP].forEach(m => Object.keys(m).forEach(k => GAME_CODES.add(m[k])));
@@ -1172,11 +1182,12 @@
       s1: pressed.has(map.s1),
       s2: pressed.has(map.s2),
       s3: pressed.has(map.s3),
+      s4: pressed.has(map.s4),
       dom: pressed.has(map.dom),
     };
   }
 
-  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, dom: false };
+  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false };
 
   /* ================= THREE SETUP ================= */
   function initThree() {
@@ -1427,6 +1438,24 @@
     arena.shrineRing.position.y = 0.04;
     arena.shrineRing.visible = false;
     scene.add(arena.shrineRing);
+
+    // Simple Domain barrier dome (shared, shown while a fighter channels SD)
+    const sdMat = new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.16, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    arena.sdDome = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), sdMat);
+    arena.sdDome.visible = false;
+    scene.add(arena.sdDome);
+    const sdRingMat = new THREE.MeshBasicMaterial({ color: 0xbfe2ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+    arena.sdRing = new THREE.Mesh(new THREE.RingGeometry(1.55, 1.7, 40), sdRingMat);
+    arena.sdRing.rotation.x = -Math.PI / 2;
+    arena.sdRing.position.y = 0.05;
+    arena.sdRing.visible = false;
+    scene.add(arena.sdRing);
+  }
+
+  // hold guard inside an enemy domain -> Simple Domain (negates the sure-hit)
+  function simpleDomainUp(victim) {
+    return victim.input && victim.input.guard && victim.ce > 2 &&
+      victim.state !== 'ko' && victim.state !== 'knockdown';
   }
 
   /* ================= PARTICLES ================= */
@@ -1612,9 +1641,14 @@
       leanZ: 0,
       tumble: 0,
       animBack: false,
+      blueT: -99, redT: -99,      // gojo fusion timestamps
+      dismT: -99, cleaveT: -99,   // sukuna fusion timestamps
+      vortexRef: null, redRef: null,
+      sdT: 0,                     // simple domain visual timer
+      bleedT: 0,
       state: 'idle', // idle|dash|attack|skill|guard|hitstun|knockdown|stunned|domainCast|ko|win|repelled
       action: null,  // {name,t,dur,data}
-      cds: { s1: 0, s2: 0, s3: 0 },
+      cds: { s1: 0, s2: 0, s3: 0, s4: 0 },
       guarding: false,
       guardBreakT: 0,
       invulnT: 0,
@@ -1627,7 +1661,7 @@
       animSeed: rand(0, 10),
       ai: null,
       input: NULL_INPUT,
-      buffer: { jump: 0, dash: 0, light: 0, heavy: 0, s1: 0, s2: 0, s3: 0, dom: 0 },
+      buffer: { jump: 0, dash: 0, light: 0, heavy: 0, s1: 0, s2: 0, s3: 0, s4: 0, dom: 0 },
     };
     return f;
   }
@@ -1645,7 +1679,12 @@
     f.channeling = false;
     f.state = 'idle';
     f.action = null;
-    f.cds = { s1: 0, s2: 0, s3: 0 };
+    f.cds = { s1: 0, s2: 0, s3: 0, s4: 0 };
+    f.blueT = -99; f.redT = -99;
+    f.dismT = -99; f.cleaveT = -99;
+    f.vortexRef = null; f.redRef = null;
+    f.sdT = 0;
+    f.bleedT = 0;
     f.guarding = false;
     f.guardBreakT = 0;
     f.invulnT = 0;
@@ -1669,7 +1708,7 @@
   // opts: {kb, kbUp, hitstun, melee, knockdown, dot, noFloor, ignoreGuard, infCost}
   function dealDamage(target, attacker, amount, opts) {
     opts = opts || {};
-    if (target.invulnT > 0 && !opts.dot) return { missed: true };
+    if (target.invulnT > 0 && !opts.dot && !opts.sureHit) return { missed: true };
     if (target.state === 'ko' || gameState !== 'fight') return { missed: true };
 
     // --- guard interactions ---
@@ -1826,6 +1865,7 @@
 
   function trySkill(f, slot) {
     const sk = f.cfg.skills[slot];
+    if (!sk) return;
     if (f.cds[slot] > 0 || f.ce < sk.ce) return;
     f.ce -= sk.ce;
     f.cds[slot] = sk.cd;
@@ -1839,8 +1879,11 @@
       if (slot === 's1') startAction(f, 'dismantle', 0.5);
       else if (slot === 's2') startAction(f, 'cleave', 0.0); // dur set below
       else if (slot === 's3') { startAction(f, 'fuga', 1.15); AudioSys.charge(0.7); }
+      else if (slot === 's4') startAction(f, 'pierceBlood', 0.55);
     }
     if (f.charKey === 'sukuna' && slot === 's2') {
+      f.cleaveT = elapsed;
+      checkSukunaFusion(f);
       const o = opponentOf(f);
       if (distXZ(f.pos, o.pos) < 5.5) {
         // blink to target and flurry
@@ -1934,6 +1977,7 @@
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
       p.life -= dt;
+      const prevX = p.pos.x, prevY = p.pos.y, prevZ = p.pos.z;
       p.pos.addScaledVector(p.vel, dt);
       p.mesh.position.copy(p.pos);
       // trail
@@ -1945,12 +1989,19 @@
       }
       let dead = false;
 
-      // fighter collisions
+      // fighter collisions — swept along this frame's travel segment so fast
+      // projectiles can't tunnel through a fighter between frames
       for (const f of fighters) {
         if (f === p.owner || p.hitSet.has(f)) continue;
-        tmpV.subVectors(f.pos, p.pos);
-        tmpV.y = f.pos.y + 1.0 - p.pos.y;
-        if (tmpV.length() < p.r + 0.75) {
+        const cx = f.pos.x, cy = f.pos.y + 1.0, cz = f.pos.z;
+        const sx = p.pos.x - prevX, sy = p.pos.y - prevY, sz = p.pos.z - prevZ;
+        const segLen2 = sx * sx + sy * sy + sz * sz;
+        let tSeg = 0;
+        if (segLen2 > 0.000001) {
+          tSeg = clamp(((cx - prevX) * sx + (cy - prevY) * sy + (cz - prevZ) * sz) / segLen2, 0, 1);
+        }
+        const qx = prevX + sx * tSeg - cx, qy = prevY + sy * tSeg - cy, qz = prevZ + sz * tSeg - cz;
+        if (Math.sqrt(qx * qx + qy * qy + qz * qz) < p.r + 0.75) {
           if (f.guarding && f.charKey === 'gojo') {
             // Infinity stops projectiles
             const cost = p.infCost !== undefined ? p.infCost : 8;
@@ -2064,7 +2115,9 @@
         f.animName = 'castForward';
         if (crossed(act, 0.3, dt)) {
           AudioSys.blast(420);
-          spawnBlueVortex(f, o.pos.clone());
+          f.vortexRef = spawnBlueVortex(f, o.pos.clone());
+          f.blueT = elapsed;
+          checkGojoFusion(f);
         }
         if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
         break;
@@ -2076,12 +2129,14 @@
           addShake(0.2, 0.2);
           const start = f.pos.clone().addScaledVector(fw, 1.2).setY(1.35);
           tmpV.subVectors(o.pos, f.pos).setY(0).normalize();
-          spawnProjectile({
+          f.redRef = spawnProjectile({
             owner: f, pos: start, vel: tmpV.clone().multiplyScalar(30),
             r: 0.7, visR: 0.55, dmg: 120, kb: 22, kbUp: 9, knockdown: true,
             color: 0xff3344, trailColor: 0xff6677, type: 'orb', life: 2.2, infCost: 20,
           });
+          f.redT = elapsed;
           burst(start, 0xff3344, 10, 6, 0.3, 0.7);
+          checkGojoFusion(f);
         }
         if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
         break;
@@ -2119,6 +2174,8 @@
         f.animName = act.t < 0.2 ? 'slashL' : 'slashR';
         if (crossed(act, 0.22, dt)) {
           AudioSys.slash();
+          f.dismT = elapsed;
+          checkSukunaFusion(f);
           const base = Math.atan2(o.pos.x - f.pos.x, o.pos.z - f.pos.z);
           for (let k = -1; k <= 1; k++) {
             const a = base + k * 0.14;
@@ -2191,6 +2248,36 @@
         break;
       }
 
+      case 'pierceBlood': {
+        f.animName = act.t < 0.25 ? 'castCharge' : 'castForward';
+        if (act.t < 0.28 && Math.random() < 0.5) {
+          const hp2 = f.pos.clone().addScaledVector(fw, 0.9).setY(1.4);
+          spawnP(hp2.clone().add(tmpV.set(rand(-0.8, 0.8), rand(-0.6, 0.8), rand(-0.8, 0.8))), tmpV.multiplyScalar(-4), 0.25, 0.5, 0xbb1122);
+        }
+        if (crossed(act, 0.3, dt)) {
+          AudioSys.blast(600);
+          addShake(0.25, 0.2);
+          const start = f.pos.clone().addScaledVector(fw, 1.3).setY(1.4);
+          tmpV.subVectors(o.pos, f.pos).setY(0).normalize();
+          spawnProjectile({
+            owner: f, pos: start, vel: tmpV.clone().multiplyScalar(55),
+            r: 0.55, visR: 0.4, dmg: 0, color: 0xdd1133, trailColor: 0x991122, type: 'orb', life: 1.4, infCost: 25,
+            onImpact: function (hitF, point) {
+              if (hitF) {
+                const res = dealDamage(hitF, f, 130, { kb: 10, kbUp: 3, infCost: 25 });
+                if (res.hit) hitF.bleedT = 2.2;
+                AudioSys.slash();
+                burst(point.clone(), 0xcc1122, 16, 9, 0.5, 0.8);
+                spawnRing(point.clone(), 0xcc1122, 3, 0.35, true);
+              }
+            },
+          });
+          flashAt(start, 0xcc1122, 5, 0.3);
+        }
+        if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
+        break;
+      }
+
       /* ----- DOMAIN cast ----- */
       case 'domainCast': {
         f.animName = 'domainSign';
@@ -2219,9 +2306,11 @@
     let t = 0;
     const DUR = 1.5;
     let tickT = 0;
+    const handle = { dead: false, pos: targetPos };
     addEffect({
       update(dt) {
         t += dt;
+        if (handle.dead) return false; // consumed by a Hollow Purple fusion
         if (t >= DUR) {
           // implosion pop
           AudioSys.blast(500);
@@ -2262,6 +2351,132 @@
         return true;
       },
       dispose() { scene.remove(core); core.geometry.dispose(); core.material.dispose(); },
+    });
+    return handle;
+  }
+
+  /* ---------- technique fusions ---------- */
+  // Blue + Red cast within the window while both are live -> Hollow Purple
+  function checkGojoFusion(f) {
+    if (elapsed - f.blueT > FUSION_WINDOW || elapsed - f.redT > FUSION_WINDOW) return;
+    const vortexAlive = f.vortexRef && !f.vortexRef.dead;
+    const redAlive = f.redRef && projectiles.indexOf(f.redRef) >= 0;
+    if (!vortexAlive || !redAlive) return;
+    const a = f.vortexRef.pos.clone();
+    const b = f.redRef.pos.clone();
+    // consume both techniques
+    f.vortexRef.dead = true;
+    f.redRef.life = 0;
+    f.redRef.hitSet.add(fighters[0]); f.redRef.hitSet.add(fighters[1]);
+    f.blueT = -99; f.redT = -99;
+    const mid = a.lerp(b, 0.5).setY(1.5);
+    announce('HOLLOW PURPLE', 'Blue + Red — Imaginary Mass', 1.5, 'purple');
+    AudioSys.charge(0.5);
+    f.eyeGlow = 1.6;
+    addShake(0.4, 0.5);
+    screenFlash('rgba(170,60,255,0.45)', 0.7);
+    // brief convergence FX, then release the fused sphere at the opponent
+    const o = opponentOf(f);
+    let t = 0;
+    addEffect({
+      update(dt2) {
+        t += dt2;
+        if (Math.random() < 0.9) {
+          const c = Math.random() < 0.5 ? 0x4fd4ff : 0xff3344;
+          tmpV.set(mid.x + rand(-2.2, 2.2), mid.y + rand(-1.5, 1.5), mid.z + rand(-2.2, 2.2));
+          tmpV2.subVectors(mid, tmpV).multiplyScalar(4);
+          spawnP(tmpV, tmpV2, 0.3, 0.7, c);
+        }
+        if (t >= 0.55) {
+          AudioSys.explosion();
+          addShake(0.7, 0.6);
+          flashAt(mid, 0xa22cff, 12, 0.8);
+          spawnRing(mid, 0xa22cff, 7, 0.5, true);
+          tmpV.subVectors(o.pos, mid).setY(0);
+          if (tmpV.lengthSq() < 0.01) tmpV.set(0, 0, 1);
+          tmpV.normalize();
+          spawnProjectile({
+            owner: f, pos: mid.clone(), vel: tmpV.clone().multiplyScalar(26),
+            r: 2.6, visR: 2.3, dmg: 300, kb: 28, kbUp: 13, knockdown: true, pierce: true,
+            color: 0xa22cff, trailColor: 0xc06bff, type: 'orb', life: 4, infCost: 60,
+          });
+          return false;
+        }
+        return true;
+      },
+    });
+  }
+
+  // Dismantle + Cleave cast within the window -> World Cutting Slash
+  function checkSukunaFusion(f) {
+    if (elapsed - f.dismT > FUSION_WINDOW || elapsed - f.cleaveT > FUSION_WINDOW) return;
+    f.dismT = -99; f.cleaveT = -99;
+    worldCuttingSlash(f);
+  }
+
+  function worldCuttingSlash(f) {
+    const o = opponentOf(f);
+    announce('WORLD CUTTING SLASH', 'Dismantle + Cleave', 1.5, 'shrine');
+    AudioSys.charge(0.5);
+    f.eyeGlow = 1.6;
+    addShake(0.3, 0.5);
+    const dir = new THREE.Vector3().subVectors(o.pos, f.pos).setY(0);
+    if (dir.lengthSq() < 0.01) dir.set(0, 0, 1);
+    dir.normalize();
+    const origin = f.pos.clone().setY(0);
+    // telegraphed cut line across the arena, then the world splits
+    const grp = new THREE.Group();
+    grp.position.copy(origin);
+    grp.rotation.y = Math.atan2(dir.x, dir.z);
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xff2222, transparent: true, opacity: 0.3, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 46), lineMat);
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(0, 0.06, 21);
+    grp.add(line);
+    // vertical light-wall along the cut, revealed at the strike moment
+    const bladeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false });
+    const blade = new THREE.Mesh(new THREE.PlaneGeometry(46, 1.5), bladeMat);
+    blade.rotation.y = Math.PI / 2;
+    blade.position.set(0, 1.3, 21);
+    grp.add(blade);
+    scene.add(grp);
+    let t = 0;
+    let struck = false;
+    addEffect({
+      update(dt2) {
+        t += dt2;
+        if (t < 0.55) {
+          lineMat.opacity = 0.2 + Math.sin(t * 30) * 0.12;
+        } else if (!struck) {
+          struck = true;
+          AudioSys.heavyHit();
+          AudioSys.slash();
+          addShake(0.8, 0.6);
+          screenFlash('rgba(255,60,40,0.5)', 0.5);
+          bladeMat.opacity = 1;
+          for (let i = 0; i < 9; i++) {
+            tmpV.copy(origin).addScaledVector(dir, 2 + i * 4.6);
+            tmpV.y = rand(0.4, 2.2);
+            spawnSlashArc(tmpV, 0xff4433, true);
+          }
+          // hit anything close to the cut line
+          const dx = o.pos.x - origin.x, dz = o.pos.z - origin.z;
+          const along = dx * dir.x + dz * dir.z;
+          const perp = Math.abs(dx * dir.z - dz * dir.x);
+          if (along > -0.5 && perp < 2.2 && o.state !== 'ko') {
+            dealDamage(o, f, 180, { kb: 16, kbUp: 6, knockdown: true, infCost: 70, sureHit: true });
+          }
+        } else {
+          bladeMat.opacity = Math.max(0, 1 - (t - 0.55) * 2.4);
+          lineMat.opacity = Math.max(0, 0.3 - (t - 0.55) * 0.8);
+        }
+        return t < 1.2;
+      },
+      dispose() {
+        scene.remove(grp);
+        line.geometry.dispose(); lineMat.dispose();
+        blade.geometry.dispose(); bladeMat.dispose();
+      },
     });
   }
 
@@ -2368,8 +2583,14 @@
     if (domain.key === 'void') {
       arena.voidSphere.rotation.y += dt * 0.05;
       arena.voidSphere.rotation.z += dt * 0.02;
-      // victim overwhelmed by infinite information (an armored counter domain-cast resists)
-      if (victim.state !== 'ko' && victim.state !== 'knockdown' && !(victim.action && victim.action.data && victim.action.data.armor)) {
+      if (simpleDomainUp(victim)) {
+        // Simple Domain holds back the infinite information
+        victim.ce = Math.max(0, victim.ce - 30 * dt);
+        victim.sdT = 0.2;
+        if (victim.state === 'stunned') { victim.state = 'idle'; victim.stunT = 0; }
+        if (!domain.sdAnnounced) { domain.sdAnnounced = true; announce('SIMPLE DOMAIN', '', 1.1, 'sub'); AudioSys.block(); }
+      } else if (victim.state !== 'ko' && victim.state !== 'knockdown' && !(victim.action && victim.action.data && victim.action.data.armor)) {
+        // victim overwhelmed by infinite information (an armored counter domain-cast resists)
         victim.state = 'stunned';
         victim.stunT = 0.4;
         victim.action = null;
@@ -2378,8 +2599,10 @@
       domain.tick -= dt;
       if (domain.tick <= 0) {
         domain.tick = 0.5;
-        dealDamage(victim, owner, 8, { dot: true });
-        spawnP(victim.pos.clone().add(tmpV.set(rand(-0.6, 0.6), rand(0.5, 2), rand(-0.6, 0.6))), tmpV.set(0, 1.5, 0), 0.5, 0.5, 0xbfaaff);
+        if (!(victim.sdT > 0)) {
+          dealDamage(victim, owner, 8, { dot: true });
+          spawnP(victim.pos.clone().add(tmpV.set(rand(-0.6, 0.6), rand(0.5, 2), rand(-0.6, 0.6))), tmpV.set(0, 1.5, 0), 0.5, 0.5, 0xbfaaff);
+        }
       }
     } else {
       // Malevolent Shrine: slashes rain inside the ring
@@ -2393,8 +2616,17 @@
         spawnSlashArc(tmpV, 0xff3322, Math.random() < 0.3);
         // strike victim if inside (no stagger — they can still run for the edge)
         if (distXZ(victim.pos, domain.center) < 14 && victim.state !== 'ko') {
-          const res = dealDamage(victim, owner, 13, { dot: true, infCost: 8, noFloor: true });
-          if (res.hit || res.blocked) spawnSlashArc(victim.pos.clone().setY(rand(0.6, 1.8)), 0xff5533, false);
+          if (simpleDomainUp(victim)) {
+            // slashes shatter on the Simple Domain barrier
+            victim.ce = Math.max(0, victim.ce - 12);
+            victim.sdT = 0.2;
+            if (!domain.sdAnnounced) { domain.sdAnnounced = true; announce('SIMPLE DOMAIN', '', 1.1, 'sub'); }
+            AudioSys.block();
+            spawnSlashArc(victim.pos.clone().add(tmpV.set(rand(-1.2, 1.2), rand(0.8, 1.8), rand(-1.2, 1.2))), 0xcfe8ff, false);
+          } else {
+            const res = dealDamage(victim, owner, 13, { dot: true, infCost: 8, noFloor: true });
+            if (res.hit || res.blocked) spawnSlashArc(victim.pos.clone().setY(rand(0.6, 1.8)), 0xff5533, false);
+          }
         }
       }
     }
@@ -2415,9 +2647,16 @@
     f.invulnT = Math.max(0, f.invulnT - dt);
     f.stunT = Math.max(0, f.stunT - dt);
     if (f.state === 'stunned' && f.stunT <= 0) f.state = 'idle';
-    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 8 * dt);
+    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 20 * dt);
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt * 6);
     f.eyeGlow = Math.max(0, f.eyeGlow - dt * 1.4);
+    f.sdT = Math.max(0, f.sdT - dt);
+    // bleeding from Piercing Blood (never lethal on its own)
+    if (f.bleedT > 0) {
+      f.bleedT -= dt;
+      f.hp = Math.max(1, f.hp - 10 * dt);
+      if (Math.random() < 0.2) spawnP(f.pos.clone().add(tmpV.set(rand(-0.3, 0.3), rand(0.6, 1.5), rand(-0.3, 0.3))), tmpV2.set(0, -2, 0), 0.4, 0.3, 0xbb1122);
+    }
 
     // face opponent (unless down/ko)
     if (f.state !== 'ko' && f.state !== 'knockdown') {
@@ -2460,8 +2699,8 @@
     if (canAct(f) && inp.rct && !f.guarding && f.hp < MAX_HP && f.ce > 4) {
       f.channeling = true;
       f.state = 'rct';
-      f.ce = Math.max(0, f.ce - 22 * dt);
-      f.hp = Math.min(MAX_HP, f.hp + 60 * dt);
+      f.ce = Math.max(0, f.ce - 35 * dt);
+      f.hp = Math.min(MAX_HP, f.hp + 150 * dt);
       f.eyeGlow = Math.max(f.eyeGlow, 0.5);
       f.healSndT -= dt;
       if (f.healSndT <= 0) { f.healSndT = 0.55; AudioSys.heal(); }
@@ -2492,6 +2731,7 @@
       else if (take('s1')) trySkill(f, 's1');
       else if (take('s2')) trySkill(f, 's2');
       else if (take('s3')) trySkill(f, 's3');
+      else if (take('s4')) trySkill(f, 's4');
       else if (take('dom')) tryDomain(f);
       else if (take('dash')) {
         f.state = 'dash';
@@ -2629,8 +2869,16 @@
   function aiInput(f, dt) {
     const ai = f.ai;
     const o = opponentOf(f);
-    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, dom: false };
+    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false };
     if (f.state === 'ko' || gameState !== 'fight') return inp;
+
+    // trapped in an enemy domain: raise Simple Domain (guard) if there's CE for it
+    if (domain && domain.owner !== f && f.ce > 40) {
+      if (domain.key === 'void' || distXZ(f.pos, domain.center) < 14) {
+        inp.guard = true;
+        return inp;
+      }
+    }
 
     ai.t -= dt;
     ai.guardT = Math.max(0, ai.guardT - dt);
@@ -2699,8 +2947,9 @@
           if (d > 5 && d < 17 && f.cds.s1 <= 0 && f.ce >= S.s1.ce && Math.random() < 0.55) inp.s1 = true;
           else if (d < 5.5 && f.cds.s2 <= 0 && f.ce >= S.s2.ce && Math.random() < 0.5) inp.s2 = true;
           else if ((d > 8 || o.state === 'knockdown' || o.state === 'stunned' || oppCastingBig) && f.cds.s3 <= 0 && f.ce >= S.s3.ce && Math.random() < 0.4) inp.s3 = true;
+          else if (d > 4 && d < 15 && f.cds.s4 <= 0 && f.ce >= S.s4.ce && Math.random() < 0.45) inp.s4 = true;
         }
-        if (inp.s1 || inp.s2 || inp.s3) return inp;
+        if (inp.s1 || inp.s2 || inp.s3 || inp.s4) return inp;
       }
       // melee
       if (d < 2.6 && Math.random() < ai.aggr) {
@@ -2791,9 +3040,9 @@
     side.skills.innerHTML = '';
     const map = f.idx === 0 ? P1MAP : P2MAP;
     const keyLabels = f.idx === 0
-      ? { s1: 'U', s2: 'I', s3: 'O', dom: 'P' }
-      : (mode.vsAI ? { s1: '', s2: '', s3: '', dom: '' } : { s1: ';', s2: "'", s3: ']', dom: '⏎' });
-    for (const slot of ['s1', 's2', 's3', 'dom']) {
+      ? { s1: 'U', s2: 'I', s3: 'O', s4: 'Y', dom: 'P' }
+      : (mode.vsAI ? { s1: '', s2: '', s3: '', s4: '', dom: '' } : { s1: ';', s2: "'", s3: ']', s4: '\\', dom: '⏎' });
+    for (const slot of Object.keys(f.cfg.skills)) {
       const sk = f.cfg.skills[slot];
       const el = document.createElement('div');
       el.className = 'skill' + (slot === 'dom' ? ' domain-skill' : '');
@@ -3061,6 +3310,20 @@
     }
     if (gameState === 'matchEnd' && fighters.length > 0) updateCamera(dt);
 
+    // simple domain barrier follows whoever is channeling it
+    let sdF = null;
+    for (const f of fighters) if (f.sdT > 0) { sdF = f; break; }
+    if (sdF) {
+      arena.sdDome.visible = true;
+      arena.sdRing.visible = true;
+      arena.sdDome.position.set(sdF.pos.x, 0, sdF.pos.z);
+      arena.sdRing.position.set(sdF.pos.x, 0.05, sdF.pos.z);
+      arena.sdDome.scale.setScalar(1 + Math.sin(elapsed * 9) * 0.05);
+    } else {
+      arena.sdDome.visible = false;
+      arena.sdRing.visible = false;
+    }
+
     updateEffects(dt);
     updateParticles(dt);
     updateAnnounce(dt);
@@ -3085,6 +3348,7 @@
     get fighters() { return fighters; },
     get domain() { return domain; },
     get state() { return gameState; },
+    get projectiles() { return projectiles; },
     giveCE: function (idx, amt) { if (fighters[idx]) fighters[idx].ce = amt; },
   };
 })();
