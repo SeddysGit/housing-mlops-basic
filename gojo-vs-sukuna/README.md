@@ -28,6 +28,8 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
 | Skill 2 | `I` | `'` |
 | Skill 3 | `O` | `]` |
 | Skill 4 (Sukuna: Piercing Blood) | `Y` | `\` |
+| Grab (breaks guard/Infinity) | guard + `J` | guard + `,` |
+| Taunt | `T` | `0` |
 | **Reverse Cursed Technique** (heal) | hold `N` | hold `[` |
 | **Domain Expansion** | `P` | `Enter` |
 
@@ -60,6 +62,17 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
   target bleeding (`Y`).
 - **Domain: Malevolent Shrine** — a barrierless domain: slashes rain on everything inside
   the red ring. No shelter — run for the edge or eat the storm.
+
+**Advanced combat**
+- **Grab** (guard + light attack): breaks straight through Guard *and* Infinity —
+  the answer to a turtling opponent. Whiffing it leaves you wide open.
+- **Perfect Dodge**: dash *through* an incoming attack during your i-frames — time
+  slows, you surge +100 CE, and your next melee hit within 2s counters for 1.5×.
+- **Double jump & air dash**: one of each per trip airborne.
+- **Black Flash chains**: land Black Flashes within 10s of each other to stack the
+  meter (shown under your CE bar) — each stack adds melee damage, up to ×5.
+- **Taunt** (`T` / `0`): showboat for +100 CE and a sharpened Black Flash trigger
+  for 5 seconds. You're wide open while doing it. Worth it.
 
 **Shared mechanics**
 - **Cursed Energy (CE)**: a colossal 2000-point reserve (20× the original) with fast

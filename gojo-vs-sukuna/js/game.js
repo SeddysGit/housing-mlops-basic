@@ -85,8 +85,8 @@
   const held = new Set();
   const pressed = new Set();
 
-  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', s4: 'KeyY', dom: 'KeyP', rct: 'KeyN' };
-  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', s4: 'Backslash', dom: 'Enter', rct: 'BracketLeft' };
+  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', s4: 'KeyY', dom: 'KeyP', rct: 'KeyN', taunt: 'KeyT' };
+  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', s4: 'Backslash', dom: 'Enter', rct: 'BracketLeft', taunt: 'Digit0' };
 
   const GAME_CODES = new Set();
   [P1MAP, P2MAP].forEach(m => Object.keys(m).forEach(k => GAME_CODES.add(m[k])));
@@ -120,10 +120,11 @@
       s3: pressed.has(map.s3),
       s4: pressed.has(map.s4),
       dom: pressed.has(map.dom),
+      taunt: pressed.has(map.taunt),
     };
   }
 
-  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false };
+  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false, taunt: false };
 
   /* ================= THREE SETUP ================= */
   function initThree() {
@@ -582,6 +583,10 @@
       vortexRef: null, redRef: null,
       sdT: 0,                     // simple domain visual timer
       bleedT: 0,
+      airJumps: 1, airDashes: 1,  // air mobility charges
+      pdBuffT: 0,                 // perfect-dodge counter window
+      bfChain: 0, bfChainT: 0,    // black flash chain meter
+      tauntBuffT: 0,
       state: 'idle', // idle|dash|attack|skill|guard|hitstun|knockdown|stunned|domainCast|ko|win|repelled
       action: null,  // {name,t,dur,data}
       cds: { s1: 0, s2: 0, s3: 0, s4: 0 },
@@ -597,7 +602,7 @@
       animSeed: rand(0, 10),
       ai: null,
       input: NULL_INPUT,
-      buffer: { jump: 0, dash: 0, light: 0, heavy: 0, s1: 0, s2: 0, s3: 0, s4: 0, dom: 0 },
+      buffer: { jump: 0, dash: 0, light: 0, heavy: 0, s1: 0, s2: 0, s3: 0, s4: 0, dom: 0, taunt: 0 },
     };
     return f;
   }
@@ -621,6 +626,12 @@
     f.vortexRef = null; f.redRef = null;
     f.sdT = 0;
     f.bleedT = 0;
+    f.airJumps = 1;
+    f.airDashes = 1;
+    f.pdBuffT = 0;
+    f.bfChain = 0;
+    f.bfChainT = 0;
+    f.tauntBuffT = 0;
     f.guarding = false;
     f.guardBreakT = 0;
     f.invulnT = 0;
@@ -644,7 +655,14 @@
   // opts: {kb, kbUp, hitstun, melee, knockdown, dot, noFloor, ignoreGuard, infCost}
   function dealDamage(target, attacker, amount, opts) {
     opts = opts || {};
-    if (target.invulnT > 0 && !opts.dot && !opts.sureHit) return { missed: true };
+    if (target.invulnT > 0 && !opts.dot && !opts.sureHit) {
+      // dodged the hit inside dash i-frames: PERFECT DODGE
+      if (target.action && target.action.name === 'dash' && !target.action.data.pd) {
+        target.action.data.pd = true;
+        perfectDodge(target);
+      }
+      return { missed: true };
+    }
     if (target.state === 'ko' || gameState !== 'fight') return { missed: true };
 
     // --- guard interactions ---
@@ -681,14 +699,17 @@
       }
     }
 
-    // --- black flash ---
+    // --- black flash (taunting sharpens the trigger; chains stack power) ---
     let blackFlash = false;
-    if (opts.melee && attacker && Math.random() < BLACK_FLASH_CHANCE) {
+    const bfChance = BLACK_FLASH_CHANCE + (attacker && attacker.tauntBuffT > 0 ? 0.13 : 0);
+    if (opts.melee && attacker && Math.random() < bfChance) {
       blackFlash = true;
+      attacker.bfChain = attacker.bfChainT > 0 ? attacker.bfChain + 1 : 1;
+      attacker.bfChainT = 10;
       amount *= 2.5;
       attacker.ce = Math.min(MAX_CE, attacker.ce + 15);
       attacker.eyeGlow = 1.4;
-      blackFlashFX(target.pos);
+      blackFlashFX(target.pos, attacker.bfChain);
     }
 
     if (domain && domain.key === 'void' && attacker === domain.owner && opts.melee) amount *= 1.25;
@@ -742,7 +763,7 @@
     burst(tmpV, 0x9f88ff, 10, 5, 0.35, 0.55);
   }
 
-  function blackFlashFX(pos) {
+  function blackFlashFX(pos, chain) {
     AudioSys.blackFlash();
     addShake(0.55, 0.45);
     slowmo.t = 0.35;
@@ -753,7 +774,21 @@
     burst(tmpV, 0x220011, 14, 8, 0.55, 1.3);
     spawnRing(tmpV, 0xff1111, 5, 0.4, true);
     flashAt(pos, 0xff2222, 6, 0.4);
-    announce('BLACK FLASH', '', 0.9, 'bf');
+    announce('BLACK FLASH' + (chain > 1 ? ' ×' + chain : ''), chain > 1 ? 'the zone deepens' : '', 0.9, 'bf');
+  }
+
+  function perfectDodge(f) {
+    AudioSys.dash();
+    AudioSys.announce();
+    slowmo.t = 0.5;
+    slowmo.factor = 0.3;
+    f.ce = Math.min(MAX_CE, f.ce + 100);
+    f.pdBuffT = 2;
+    f.eyeGlow = 1.2;
+    tmpV.copy(f.pos); tmpV.y = 1.2;
+    spawnRing(tmpV, 0xffffff, 4, 0.4, true);
+    burst(tmpV, 0xdde6ff, 14, 8, 0.4, 0.7);
+    announce('PERFECT DODGE', 'counter window open', 0.9, 'sub');
   }
 
   function koFighter(target) {
@@ -785,6 +820,12 @@
     const o = opponentOf(f);
     const d = distXZ(f.pos, o.pos);
     if (d <= range && Math.abs(f.pos.y - o.pos.y) < 1.8) {
+      if (f.bfChainT > 0) dmg *= 1 + 0.08 * Math.min(5, f.bfChain);
+      if (f.pdBuffT > 0) {
+        dmg *= 1.5;
+        f.pdBuffT = 0;
+        spawnRing(tmpV.copy(o.pos).setY(1.2), 0xffffff, 3, 0.3, true);
+      }
       const res = dealDamage(o, f, dmg, Object.assign({ melee: true }, opts));
       if (res.hit) {
         AudioSys.hit();
@@ -1029,6 +1070,49 @@
           if (res.hit) { AudioSys.heavyHit(); addShake(0.3, 0.25); }
           f.vel.x += fw.x * 4.5; f.vel.z += fw.z * 4.5;
           if (f.charKey === 'sukuna') spawnSlashArc(tmpV.copy(f.pos).addScaledVector(fw, 1.5).setY(1.3), 0xff5540, true);
+        }
+        if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
+        break;
+      }
+      case 'grab': {
+        f.animName = act.t < 0.32 ? 'heavy' : 'heavyHit';
+        if (crossed(act, 0.18, dt)) {
+          if (distXZ(f.pos, o.pos) <= 2.0 && Math.abs(f.pos.y - o.pos.y) < 1.5 && o.invulnT <= 0 && o.state !== 'ko' && !(o.action && o.action.data && o.action.data.armor)) {
+            act.data.caught = true;
+            o.action = null;
+            o.guarding = false;
+            o.state = 'hitstun';
+            startAction(o, 'hitstun', 0.4);
+            AudioSys.hit();
+          } else {
+            AudioSys.swoosh(); // whiffed — long recovery
+          }
+        }
+        if (act.data.caught && act.t < 0.34) {
+          // held in place before the slam
+          tmpV.copy(f.pos).addScaledVector(fw, 1.1);
+          o.pos.x = tmpV.x; o.pos.z = tmpV.z;
+          o.vel.set(0, 0, 0);
+        }
+        if (crossed(act, 0.34, dt) && act.data.caught) {
+          AudioSys.heavyHit();
+          addShake(0.4, 0.3);
+          dealDamage(o, f, 110, { ignoreGuard: true, kb: 15, kbUp: 9, knockdown: true });
+          burst(tmpV.copy(o.pos).setY(1.2), 0xffcc66, 14, 9, 0.4, 0.8);
+        }
+        if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
+        break;
+      }
+      case 'taunt': {
+        f.animName = 'victory';
+        if (Math.random() < 0.3) {
+          spawnP(f.pos.clone().add(tmpV.set(rand(-0.8, 0.8), rand(0.5, 2.2), rand(-0.8, 0.8))), tmpV2.set(0, 1.5, 0), 0.5, 0.4, f.cfg.color);
+        }
+        if (crossed(act, 0.9, dt)) {
+          f.ce = Math.min(MAX_CE, f.ce + 100);
+          f.tauntBuffT = 5;
+          f.eyeGlow = 1.2;
+          spawnRing(f.pos.clone().setY(0.1), f.cfg.color, 4, 0.4, false);
         }
         if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
         break;
@@ -1587,6 +1671,12 @@
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt * 6);
     f.eyeGlow = Math.max(0, f.eyeGlow - dt * 1.4);
     f.sdT = Math.max(0, f.sdT - dt);
+    f.pdBuffT = Math.max(0, f.pdBuffT - dt);
+    f.tauntBuffT = Math.max(0, f.tauntBuffT - dt);
+    if (f.bfChainT > 0) {
+      f.bfChainT -= dt;
+      if (f.bfChainT <= 0) f.bfChain = 0;
+    }
     // bleeding from Piercing Blood (never lethal on its own)
     if (f.bleedT > 0) {
       f.bleedT -= dt;
@@ -1657,6 +1747,15 @@
     }
     const take = function (bk) { if (f.buffer[bk] > 0) { f.buffer[bk] = 0; return true; } return false; };
 
+    // grab: light attack while guarding — breaks through guard and Infinity
+    if (f.guarding && f.guardBreakT <= 0 && canAct(f) && f.buffer.light > 0) {
+      f.buffer.light = 0;
+      f.guarding = false;
+      f.state = 'attack';
+      startAction(f, 'grab', 0.8);
+      AudioSys.swoosh();
+    }
+
     // actions in progress
     updateAction(f, dt);
 
@@ -1669,7 +1768,17 @@
       else if (take('s3')) trySkill(f, 's3');
       else if (take('s4')) trySkill(f, 's4');
       else if (take('dom')) tryDomain(f);
-      else if (take('dash')) {
+      else if (take('taunt')) {
+        f.state = 'attack';
+        startAction(f, 'taunt', 1.1);
+        AudioSys.announce();
+      }
+      else if (take('dash') && (f.onGround || f.airDashes > 0)) {
+        if (!f.onGround) {
+          f.airDashes--;
+          f.vel.y = Math.max(f.vel.y, 2);
+          burst(f.pos.clone().setY(1.0), 0x9fc4ff, 10, 5, 0.3, 0.6);
+        }
         f.state = 'dash';
         startAction(f, 'dash', 0.24);
         f.invulnT = 0.28;
@@ -1684,10 +1793,18 @@
         f.vel.z = tmpV2.z * 19;
         burst(f.pos.clone().setY(0.6), 0xffffff, 6, 3, 0.25, 0.5);
       }
-      else if (f.buffer.jump > 0 && f.onGround) {
+      else if (f.buffer.jump > 0 && (f.onGround || f.airJumps > 0)) {
         f.buffer.jump = 0;
-        f.vel.y = 11.5;
-        f.onGround = false;
+        if (f.onGround) {
+          f.vel.y = 11.5;
+          f.onGround = false;
+        } else {
+          // double jump
+          f.airJumps--;
+          f.vel.y = 10.5;
+          spawnRing(f.pos.clone().setY(f.pos.y + 0.2), 0x9fc4ff, 2.5, 0.3, false);
+          burst(f.pos.clone().setY(f.pos.y + 0.3), 0xdde6ff, 8, 4, 0.3, 0.5);
+        }
         AudioSys.swoosh();
       }
     }
@@ -1731,6 +1848,8 @@
       f.pos.y = 0;
       f.vel.y = 0;
       f.onGround = true;
+      f.airJumps = 1;
+      f.airDashes = 1;
     }
     // arena bounds
     const r = Math.sqrt(f.pos.x * f.pos.x + f.pos.z * f.pos.z);
@@ -1805,7 +1924,7 @@
   function aiInput(f, dt) {
     const ai = f.ai;
     const o = opponentOf(f);
-    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false };
+    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false, taunt: false };
     if (f.state === 'ko' || gameState !== 'fight') return inp;
 
     // trapped in an enemy domain: raise Simple Domain (guard) if there's CE for it
@@ -1865,6 +1984,11 @@
       if (d > 8.5 && f.hp < MAX_HP * 0.65 && f.ce > 45 && !domain && Math.random() < 0.45) {
         ai.rctT = rand(0.9, 1.8);
         inp.rct = true;
+        return inp;
+      }
+      // showboat when comfortably ahead
+      if (d > 10 && f.hp > o.hp + 150 && !domain && Math.random() < 0.06) {
+        inp.taunt = true;
         return inp;
       }
       // punish big casts by rushing or ranged skill
@@ -1966,8 +2090,8 @@
     ui.help = $('help');
     ui.muteBtn = $('mute-btn');
     ui.p = [
-      { name: $('p1-name'), hp: $('p1-hp'), hpLag: $('p1-hp-lag'), ce: $('p1-ce'), pips: $('p1-pips'), skills: $('p1-skills'), guardLbl: $('p1-guard') },
-      { name: $('p2-name'), hp: $('p2-hp'), hpLag: $('p2-hp-lag'), ce: $('p2-ce'), pips: $('p2-pips'), skills: $('p2-skills'), guardLbl: $('p2-guard') },
+      { name: $('p1-name'), hp: $('p1-hp'), hpLag: $('p1-hp-lag'), ce: $('p1-ce'), pips: $('p1-pips'), skills: $('p1-skills'), guardLbl: $('p1-guard'), bf: $('p1-bf') },
+      { name: $('p2-name'), hp: $('p2-hp'), hpLag: $('p2-hp-lag'), ce: $('p2-ce'), pips: $('p2-pips'), skills: $('p2-skills'), guardLbl: $('p2-guard'), bf: $('p2-bf') },
     ];
   }
 
@@ -1996,6 +2120,12 @@
       side.ce.style.width = (clamp(f.ce / MAX_CE, 0, 1) * 100) + '%';
       side.ce.classList.toggle('full', f.ce >= DOMAIN_COST);
       side.guardLbl.textContent = f.cfg.guardName;
+      if (f.bfChain > 1 && f.bfChainT > 0) {
+        side.bf.textContent = 'BLACK FLASH ×' + f.bfChain;
+        side.bf.classList.remove('hidden');
+      } else {
+        side.bf.classList.add('hidden');
+      }
       const icons = side.skills.children;
       for (const el of icons) {
         const slot = el.dataset.slot;

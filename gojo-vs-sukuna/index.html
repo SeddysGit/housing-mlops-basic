@@ -63,6 +63,9 @@
   .ce-fill.full { background: linear-gradient(90deg, #b16bff, #ffd76b); box-shadow: 0 0 12px rgba(200,140,255,0.9); }
   .ce-mark { position: absolute; left: 40%; top: -1px; bottom: -1px; width: 2px; background: rgba(255,215,107,0.85); }
   .guard-label { font-size: 10px; letter-spacing: 0.2em; color: #8b96b8; margin-top: 3px; text-transform: uppercase; }
+  .bf-chain { font-size: 12px; font-weight: 900; letter-spacing: 0.15em; color: #ff3322; margin-top: 3px;
+              text-shadow: 0 0 10px rgba(255,30,20,0.9); animation: bfpulse 0.5s infinite alternate; }
+  @keyframes bfpulse { from { opacity: 0.75; } to { opacity: 1; } }
   .pips { display: flex; gap: 6px; margin-top: 6px; }
   .pip { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(200,210,255,0.5); background: rgba(20,24,44,0.7); }
   .pip.won { background: #ffd76b; box-shadow: 0 0 10px rgba(255,215,107,0.8); }
@@ -182,6 +185,7 @@
         <div class="hp-bar"><div class="hp-lag" id="p1-hp-lag"></div><div class="hp-fill" id="p1-hp"></div></div>
         <div class="ce-bar"><div class="ce-fill" id="p1-ce"></div><div class="ce-mark"></div></div>
         <div class="guard-label" id="p1-guard">Infinity</div>
+        <div class="bf-chain hidden" id="p1-bf"></div>
         <div class="pips" id="p1-pips"><div class="pip"></div><div class="pip"></div></div>
         <div class="skills-row" id="p1-skills"></div>
       </div>
@@ -191,6 +195,7 @@
         <div class="hp-bar"><div class="hp-lag" id="p2-hp-lag"></div><div class="hp-fill" id="p2-hp"></div></div>
         <div class="ce-bar"><div class="ce-fill" id="p2-ce"></div><div class="ce-mark"></div></div>
         <div class="guard-label" id="p2-guard">Guard</div>
+        <div class="bf-chain hidden" id="p2-bf"></div>
         <div class="pips" id="p2-pips"><div class="pip"></div><div class="pip"></div></div>
         <div class="skills-row" id="p2-skills"></div>
       </div>
@@ -206,7 +211,8 @@
     <b>P1</b>: WASD move · Space jump · L-Shift dash · J light · K heavy · L guard/Infinity · U/I/O/Y skills · N heal (RCT) · P Domain<br>
     <b>P2</b>: Arrows move · R-Shift jump · R-Ctrl dash · , light · . heavy · / guard · ; ' ] \ skills · [ heal · Enter Domain<br>
     <b>FUSIONS</b>: Gojo — Blue then Red fast = <b>HOLLOW PURPLE</b> · Sukuna — Dismantle then Cleave fast = <b>WORLD CUTTING SLASH</b><br>
-    Hold <b>guard inside an enemy Domain</b> to raise a <b>SIMPLE DOMAIN</b> (drains CE, negates the sure-hit) · Melee can spark <b>BLACK FLASH</b> · Hold heal for <b>REVERSE CURSED TECHNIQUE</b>
+    <b>GRAB</b> (guard+light) breaks guard &amp; Infinity · dash through an attack = <b>PERFECT DODGE</b> (slow-mo, +CE, 1.5× counter) · <b>double jump</b> &amp; <b>air dash</b><br>
+    Hold <b>guard inside an enemy Domain</b> for a <b>SIMPLE DOMAIN</b> · <b>Taunt</b> (T / 0): +CE and sharper <b>BLACK FLASH</b> — chains stack damage · Hold heal for <b>RCT</b>
   </div>
 
   <!-- RESULT -->
