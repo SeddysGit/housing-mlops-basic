@@ -11,8 +11,13 @@ no external assets — all models are procedural and all audio is synthesized wi
 
 Just open `index.html` in any modern desktop browser (double-click works — no server needed).
 
-Pick **1 Player vs CPU** (Easy / Normal / Hard) or **2 Players** on one keyboard,
-then choose your fighter. Best of 3 rounds, 99-second timer.
+Pick **1 Player vs CPU** (Easy / Normal / Hard), **2 Players** on one keyboard, or
+**⚡ Survival** — endless waves of an ever-stronger CPU: each wave it hits harder,
+reacts faster, and guards smarter, while you get a partial heal between waves.
+Your best streak is saved. Versus matches are best of 3 rounds with a 99-second timer.
+
+Every hit pops **damage numbers** (gold for heavy, red for Black Flash), combos show
+a **hit counter**, and big impacts land with a hit-stop freeze frame.
 
 ## Controls
 

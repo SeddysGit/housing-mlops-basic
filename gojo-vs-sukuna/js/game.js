@@ -58,9 +58,12 @@
   let roundNum = 1;
   let roundTimer = ROUND_TIME;
   let wins = [0, 0];
-  let mode = { vsAI: true, difficulty: 'normal', p1Char: 'gojo' };
+  let mode = { vsAI: true, difficulty: 'normal', p1Char: 'gojo', survival: false };
+  let wave = 1;
+  let lastRoundWinner = -1;
   let shake = { t: 0, mag: 0 };
   let slowmo = { t: 0, factor: 1 };
+  let hitstopT = 0;
   let camSide = 1;
   let camPos = new THREE.Vector3(0, 6, 20);
   let announceQ = [];
@@ -465,6 +468,55 @@
     }
   }
 
+  /* ================= FLOATING DAMAGE NUMBERS ================= */
+  const dmgPool = [];
+  const projV = new THREE.Vector3();
+
+  function initDmgNums() {
+    const layer = document.getElementById('dmg-layer');
+    for (let i = 0; i < 24; i++) {
+      const el = document.createElement('div');
+      el.className = 'dmg-num hidden';
+      layer.appendChild(el);
+      dmgPool.push({ el: el, active: false, world: V3(), t: 0, life: 0.9 });
+    }
+  }
+
+  function spawnDmgNum(pos, text, cls) {
+    for (const p of dmgPool) {
+      if (p.active) continue;
+      p.active = true;
+      p.t = 0;
+      p.world.set(pos.x + rand(-0.4, 0.4), pos.y + rand(1.5, 2.0), pos.z + rand(-0.2, 0.2));
+      p.el.textContent = text;
+      p.el.className = 'dmg-num ' + (cls || '');
+      return;
+    }
+  }
+
+  function updateDmgNums(dt) {
+    for (const p of dmgPool) {
+      if (!p.active) continue;
+      p.t += dt;
+      if (p.t >= p.life) {
+        p.active = false;
+        p.el.classList.add('hidden');
+        continue;
+      }
+      projV.copy(p.world);
+      projV.y += p.t * 1.3;
+      projV.project(camera);
+      if (projV.z > 1 || Math.abs(projV.x) > 1.1 || Math.abs(projV.y) > 1.1) {
+        p.el.style.opacity = 0;
+        continue;
+      }
+      p.el.style.left = ((projV.x + 1) / 2 * window.innerWidth) + 'px';
+      p.el.style.top = ((1 - projV.y) / 2 * window.innerHeight) + 'px';
+      const k = p.t / p.life;
+      p.el.style.opacity = 1 - k * k;
+    }
+  }
+
   /* ================= EFFECTS ================= */
   function addEffect(e) { effects.push(e); }
 
@@ -588,6 +640,8 @@
       pdBuffT: 0,                 // perfect-dodge counter window
       bfChain: 0, bfChainT: 0,    // black flash chain meter
       tauntBuffT: 0,
+      comboCount: 0, comboT: 0,
+      dmgMul: 1,                  // survival wave scaling
       state: 'idle', // idle|dash|attack|skill|guard|hitstun|knockdown|stunned|domainCast|ko|win|repelled
       action: null,  // {name,t,dur,data}
       cds: { s1: 0, s2: 0, s3: 0, s4: 0 },
@@ -633,6 +687,9 @@
     f.bfChain = 0;
     f.bfChainT = 0;
     f.tauntBuffT = 0;
+    f.comboCount = 0;
+    f.comboT = 0;
+    f.dmgMul = 1;
     f.guarding = false;
     f.guardBreakT = 0;
     f.invulnT = 0;
@@ -656,6 +713,7 @@
   // opts: {kb, kbUp, hitstun, melee, knockdown, dot, noFloor, ignoreGuard, infCost}
   function dealDamage(target, attacker, amount, opts) {
     opts = opts || {};
+    if (attacker && attacker.dmgMul !== 1) amount *= attacker.dmgMul;
     if (target.invulnT > 0 && !opts.dot && !opts.sureHit) {
       // dodged the hit inside dash i-frames: PERFECT DODGE
       if (target.action && target.action.name === 'dash' && !target.action.data.pd) {
@@ -674,6 +732,7 @@
         if (target.ce >= cost) {
           target.ce -= cost;
           infinityRipple(target, attacker);
+          if (!opts.dot) spawnDmgNum(target.pos, 'NULLIFIED', 'block');
           if (opts.melee && attacker) {
             // attacker's blow halts at Infinity — brief stagger
             startAction(attacker, 'repelled', 0.45);
@@ -693,6 +752,7 @@
         AudioSys.block();
         burst(tmpV.copy(target.pos).setY(1.2), 0xffcc66, 6, 4, 0.3, 0.5);
         amount *= 0.15;
+        spawnDmgNum(target.pos, 'BLOCK', 'block');
         target.hp = Math.max(1, target.hp - amount);
         target.ce = Math.min(MAX_CE, target.ce + 2);
         pushBack(target, attacker, (opts.kb || 6) * 0.4, 0);
@@ -719,6 +779,19 @@
     if (opts.dot && !opts.noFloor) target.hp = Math.max(1, target.hp);
     if (attacker) attacker.ce = Math.min(MAX_CE, attacker.ce + (opts.melee ? 8 : 5));
     target.ce = Math.min(MAX_CE, target.ce + 3);
+
+    // juice: damage numbers, combo counting, hit-stop on big impacts
+    if (!opts.dot) {
+      spawnDmgNum(target.pos, Math.round(amount), blackFlash ? 'crit' : (amount >= 90 ? 'big' : ''));
+      if (attacker) {
+        attacker.comboCount++;
+        attacker.comboT = 2;
+      }
+      target.comboCount = 0;
+      target.comboT = 0;
+      if (blackFlash) hitstopT = Math.max(hitstopT, 0.12);
+      else if (amount >= 60) hitstopT = Math.max(hitstopT, 0.07);
+    }
 
     // interrupt target action (domain casts have super armor)
     const armored = target.action && target.action.data && target.action.data.armor;
@@ -1707,6 +1780,10 @@
       f.bfChainT -= dt;
       if (f.bfChainT <= 0) f.bfChain = 0;
     }
+    if (f.comboT > 0) {
+      f.comboT -= dt;
+      if (f.comboT <= 0) f.comboCount = 0;
+    }
     // bleeding from Piercing Blood (never lethal on its own)
     if (f.bleedT > 0) {
       f.bleedT -= dt;
@@ -2135,12 +2212,13 @@
     ui.timer = $('timer');
     ui.result = $('result');
     ui.resultTitle = $('result-title');
+    ui.resultSub = $('result-sub');
     ui.pause = $('pause');
     ui.help = $('help');
     ui.muteBtn = $('mute-btn');
     ui.p = [
-      { name: $('p1-name'), hp: $('p1-hp'), hpLag: $('p1-hp-lag'), ce: $('p1-ce'), pips: $('p1-pips'), skills: $('p1-skills'), guardLbl: $('p1-guard'), bf: $('p1-bf') },
-      { name: $('p2-name'), hp: $('p2-hp'), hpLag: $('p2-hp-lag'), ce: $('p2-ce'), pips: $('p2-pips'), skills: $('p2-skills'), guardLbl: $('p2-guard'), bf: $('p2-bf') },
+      { name: $('p1-name'), hp: $('p1-hp'), hpLag: $('p1-hp-lag'), ce: $('p1-ce'), pips: $('p1-pips'), skills: $('p1-skills'), guardLbl: $('p1-guard'), bf: $('p1-bf'), combo: $('p1-combo') },
+      { name: $('p2-name'), hp: $('p2-hp'), hpLag: $('p2-hp-lag'), ce: $('p2-ce'), pips: $('p2-pips'), skills: $('p2-skills'), guardLbl: $('p2-guard'), bf: $('p2-bf'), combo: $('p2-combo') },
     ];
   }
 
@@ -2193,7 +2271,23 @@
         }
       }
     }
-    ui.timer.textContent = Math.ceil(roundTimer);
+    if (mode.survival) {
+      ui.timer.textContent = 'W' + wave;
+      ui.timer.classList.add('wave');
+    } else {
+      ui.timer.textContent = Math.ceil(roundTimer);
+      ui.timer.classList.remove('wave');
+    }
+    // combo counters
+    for (let i = 0; i < 2; i++) {
+      const f = fighters[i], side = ui.p[i];
+      if (f.comboCount >= 2 && f.comboT > 0) {
+        side.combo.textContent = f.comboCount + ' HITS';
+        side.combo.className = 'combo ' + (f.comboCount >= 10 ? 'red' : f.comboCount >= 5 ? 'gold' : '');
+      } else {
+        side.combo.className = 'combo hidden';
+      }
+    }
   }
 
   function updatePips() {
@@ -2253,6 +2347,8 @@
 
   function startMatch(p1Char) {
     mode.p1Char = p1Char;
+    wave = 1;
+    ui.hud.classList.toggle('survival', mode.survival);
     const p2Char = p1Char === 'gojo' ? 'sukuna' : 'gojo';
     // clean up old fighters
     for (const f of fighters) { scene.remove(f.model.group); disposeObject(f.model.group); }
@@ -2270,22 +2366,52 @@
     startRound();
   }
 
+  function applyWaveScaling(enemy) {
+    enemy.dmgMul = 1 + 0.12 * (wave - 1);
+    if (enemy.ai) {
+      enemy.ai.think = Math.max(0.12, enemy.ai.think * Math.pow(0.93, wave - 1));
+      enemy.ai.guardP = Math.min(0.7, enemy.ai.guardP + 0.03 * (wave - 1));
+      enemy.ai.aggr = Math.min(1.3, enemy.ai.aggr + 0.04 * (wave - 1));
+      enemy.ai.skillP = Math.min(0.95, enemy.ai.skillP + 0.03 * (wave - 1));
+    }
+  }
+
   function startRound() {
     clearProjectiles();
     endDomain();
     resetFighter(fighters[0], -5, 0, Math.PI / 2);
     resetFighter(fighters[1], 5, 0, -Math.PI / 2);
+    if (mode.survival) applyWaveScaling(fighters[1]);
     roundTimer = ROUND_TIME;
     updatePips();
     gameState = 'intro';
     introT = 2.3;
-    announce('ROUND ' + roundNum, '', 1.2, 'round');
+    announce(mode.survival ? 'WAVE ' + wave : 'ROUND ' + roundNum, '', 1.2, 'round');
+  }
+
+  function startWave() {
+    // next survival wave: enemy resets stronger, the player keeps momentum + a breather heal
+    clearProjectiles();
+    endDomain();
+    const player = fighters[0];
+    const keepHp = player.hp, keepCe = player.ce;
+    resetFighter(player, -5, 0, Math.PI / 2);
+    player.hp = Math.min(MAX_HP, keepHp + 300);
+    player.displayHp = player.hp;
+    player.ce = Math.min(MAX_CE, keepCe + 200);
+    resetFighter(fighters[1], 5, 0, -Math.PI / 2);
+    applyWaveScaling(fighters[1]);
+    roundTimer = ROUND_TIME;
+    gameState = 'intro';
+    introT = 2.3;
+    announce('WAVE ' + wave, '', 1.2, 'round');
   }
 
   function beginRoundEnd(winner) {
     if (gameState !== 'fight') return;
     gameState = 'roundEnd';
     roundEndT = 3.0;
+    lastRoundWinner = winner.idx;
     wins[winner.idx]++;
     winner.state = 'win';
     winner.action = null;
@@ -2305,6 +2431,7 @@
     if (loser.state !== 'ko') loser.state = 'idle';
     gameState = 'roundEnd';
     roundEndT = 3.0;
+    lastRoundWinner = winner.idx;
     wins[winner.idx]++;
     winner.state = 'win';
     announce('TIME UP', '', 1.4, 'ko');
@@ -2312,12 +2439,32 @@
   }
 
   function finishRound() {
+    if (mode.survival) {
+      if (lastRoundWinner === 0) {
+        wave++;
+        startWave();
+      } else {
+        const cleared = wave - 1;
+        let best = 0;
+        try { best = parseInt(localStorage.getItem('jjk-best-waves') || '0', 10) || 0; } catch (e) {}
+        if (cleared > best) { try { localStorage.setItem('jjk-best-waves', String(cleared)); } catch (e) {} }
+        gameState = 'matchEnd';
+        ui.resultTitle.textContent = 'SURVIVED ' + cleared + ' WAVE' + (cleared === 1 ? '' : 'S');
+        ui.resultTitle.style.color = '#ffd76b';
+        ui.resultSub.textContent = 'BEST: ' + Math.max(best, cleared);
+        ui.resultSub.classList.remove('hidden');
+        showScreen('result');
+        ui.hud.classList.remove('hidden');
+      }
+      return;
+    }
     if (wins[0] >= WINS_NEEDED || wins[1] >= WINS_NEEDED) {
       const wIdx = wins[0] >= WINS_NEEDED ? 0 : 1;
       gameState = 'matchEnd';
       const w = fighters[wIdx];
       ui.resultTitle.textContent = w.cfg.name + ' WINS';
       ui.resultTitle.style.color = w.cfg.css;
+      ui.resultSub.classList.add('hidden');
       showScreen('result');
       ui.hud.classList.remove('hidden');
     } else {
@@ -2330,6 +2477,7 @@
     showScreen('hud');
     wins = [0, 0];
     roundNum = 1;
+    wave = 1;
     startRound();
   }
 
@@ -2348,8 +2496,9 @@
 
   /* ================= MENU WIRING ================= */
   function wireMenus() {
-    $('btn-1p').addEventListener('click', function () { mode.vsAI = true; showScreen('select'); });
-    $('btn-2p').addEventListener('click', function () { mode.vsAI = false; showScreen('select'); });
+    $('btn-1p').addEventListener('click', function () { mode.vsAI = true; mode.survival = false; showScreen('select'); });
+    $('btn-2p').addEventListener('click', function () { mode.vsAI = false; mode.survival = false; showScreen('select'); });
+    $('btn-survival').addEventListener('click', function () { mode.vsAI = true; mode.survival = true; showScreen('select'); });
     for (const diff of ['easy', 'normal', 'hard']) {
       $('diff-' + diff).addEventListener('click', function () {
         mode.difficulty = diff;
@@ -2372,16 +2521,22 @@
   function animate() {
     requestAnimationFrame(animate);
     let dt = Math.min(clock.getDelta(), 0.05);
+    const rawDt = dt;
     elapsed += dt;
 
     if (paused) { pressed.clear(); renderer.render(scene, camera); return; }
-    updateFlash(dt);
+    updateFlash(rawDt);
 
     // slow motion
     if (slowmo.t > 0) {
       slowmo.t -= dt;
       dt *= slowmo.factor;
       if (slowmo.t <= 0) slowmo.factor = 1;
+    }
+    // hit-stop: freeze the world for a few frames on heavy impacts
+    if (hitstopT > 0) {
+      hitstopT -= rawDt;
+      dt = 0;
     }
 
     if (gameState === 'intro') {
@@ -2391,8 +2546,10 @@
       for (const f of fighters) { f.input = NULL_INPUT; updateFighter(f, dt); }
       fighterCollision();
     } else if (gameState === 'fight') {
-      roundTimer -= dt;
-      if (roundTimer <= 0) { roundTimer = 0; timeOutRound(); }
+      if (!mode.survival) {
+        roundTimer -= dt;
+        if (roundTimer <= 0) { roundTimer = 0; timeOutRound(); }
+      }
       for (const f of fighters) {
         f.input = f.ai ? aiInput(f, dt) : readInput(f);
         updateFighter(f, dt);
@@ -2441,7 +2598,8 @@
 
     updateEffects(dt);
     updateParticles(dt);
-    updateAnnounce(dt);
+    updateAnnounce(rawDt);
+    updateDmgNums(rawDt);
     pressed.clear();
     renderer.render(scene, camera);
   }
@@ -2450,6 +2608,7 @@
   function boot() {
     cacheUI();
     initThree();
+    initDmgNums();
     wireMenus();
     showScreen('menu');
     animate();

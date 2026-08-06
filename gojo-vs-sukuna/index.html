@@ -66,6 +66,19 @@
   .bf-chain { font-size: 12px; font-weight: 900; letter-spacing: 0.15em; color: #ff3322; margin-top: 3px;
               text-shadow: 0 0 10px rgba(255,30,20,0.9); animation: bfpulse 0.5s infinite alternate; }
   @keyframes bfpulse { from { opacity: 0.75; } to { opacity: 1; } }
+  .combo { font-size: 15px; font-weight: 900; letter-spacing: 0.12em; color: #e8ecf6; margin-top: 2px;
+           text-shadow: 0 0 8px rgba(120,160,255,0.7); }
+  .combo.gold { color: #ffd76b; text-shadow: 0 0 12px rgba(255,215,107,0.9); font-size: 17px; }
+  .combo.red { color: #ff4433; text-shadow: 0 0 14px rgba(255,60,40,1); font-size: 19px; }
+  #timer.wave { font-size: 26px; color: #ffd76b; letter-spacing: 0.08em; }
+  #hud.survival .pips { display: none; }
+  #dmg-layer { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+  .dmg-num { position: absolute; font-weight: 900; font-size: 21px; color: #fff; transform: translate(-50%, -50%);
+             text-shadow: 0 2px 8px rgba(0,0,0,0.95), 0 0 14px rgba(120,160,255,0.4); font-variant-numeric: tabular-nums; }
+  .dmg-num.big { font-size: 30px; color: #ffd76b; text-shadow: 0 2px 8px rgba(0,0,0,0.95), 0 0 16px rgba(255,200,80,0.7); }
+  .dmg-num.crit { font-size: 38px; color: #ff3322; text-shadow: 0 2px 10px rgba(0,0,0,1), 0 0 22px rgba(255,30,20,0.9); }
+  .dmg-num.block { font-size: 13px; color: #9fb4dd; letter-spacing: 0.15em; }
+  #result-sub { margin-top: 12px; font-size: 20px; font-weight: 700; letter-spacing: 0.25em; color: #cdd6ef; }
   .pips { display: flex; gap: 6px; margin-top: 6px; }
   .pip { width: 13px; height: 13px; border-radius: 50%; border: 1px solid rgba(200,210,255,0.5); background: rgba(20,24,44,0.7); }
   .pip.won { background: #ffd76b; box-shadow: 0 0 10px rgba(255,215,107,0.8); }
@@ -134,6 +147,7 @@
         <button class="btn" id="diff-hard">Hard</button>
       </div>
       <button class="btn" id="btn-2p">2 Players (Local)</button>
+      <button class="btn" id="btn-survival">⚡ Survival</button>
     </div>
     <div class="menu-note">Press H in battle for controls &nbsp;•&nbsp; M to mute &nbsp;•&nbsp; Esc to pause</div>
   </div>
@@ -188,6 +202,7 @@
         <div class="ce-bar"><div class="ce-fill" id="p1-ce"></div><div class="ce-mark"></div></div>
         <div class="guard-label" id="p1-guard">Infinity</div>
         <div class="bf-chain hidden" id="p1-bf"></div>
+        <div class="combo hidden" id="p1-combo"></div>
         <div class="pips" id="p1-pips"><div class="pip"></div><div class="pip"></div></div>
         <div class="skills-row" id="p1-skills"></div>
       </div>
@@ -198,6 +213,7 @@
         <div class="ce-bar"><div class="ce-fill" id="p2-ce"></div><div class="ce-mark"></div></div>
         <div class="guard-label" id="p2-guard">Guard</div>
         <div class="bf-chain hidden" id="p2-bf"></div>
+        <div class="combo hidden" id="p2-combo"></div>
         <div class="pips" id="p2-pips"><div class="pip"></div><div class="pip"></div></div>
         <div class="skills-row" id="p2-skills"></div>
       </div>
@@ -217,9 +233,13 @@
     Hold <b>guard inside an enemy Domain</b> for a <b>SIMPLE DOMAIN</b> — add <b>heal</b> to channel <b>RCT inside the barrier</b> · <b>Taunt</b> (T / 0): +CE, sharper <b>BLACK FLASH</b> · chains stack damage
   </div>
 
+  <!-- damage numbers layer -->
+  <div id="dmg-layer"></div>
+
   <!-- RESULT -->
   <div id="result" class="overlay hidden">
     <div id="result-title">GOJO WINS</div>
+    <div id="result-sub" class="hidden"></div>
     <div class="result-buttons">
       <button class="btn" id="btn-rematch">Rematch (R)</button>
       <button class="btn" id="btn-menu">Main Menu</button>
