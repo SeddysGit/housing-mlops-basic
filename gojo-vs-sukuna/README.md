@@ -27,7 +27,7 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
 | Skill 1 | `U` | `;` |
 | Skill 2 | `I` | `'` |
 | Skill 3 | `O` | `]` |
-| Skill 4 (Sukuna: Piercing Blood) | `Y` | `\` |
+| Skill 4 (Max Blue / Piercing Blood) | `Y` | `\` |
 | Grab (breaks guard/Infinity) | guard + `J` | guard + `,` |
 | Taunt | `T` | `0` |
 | **Reverse Cursed Technique** (heal) | hold `N` | hold `[` |
@@ -50,6 +50,12 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
 - **Lapse: Blue** — a vortex at the enemy's position that drags them in and detonates.
 - **Reversal: Red** — repulsive blast with huge knockback.
 - **Hollow Purple** — long charge, then a massive piercing sphere that erases the lane.
+- **Blue: Maximum Output** (`Y`) — a supersized vortex at the enemy's position that drags
+  them in from across the arena and collapses with a crushing burst. Counts toward the
+  Purple fusion.
+- **Infinity Warp** — Gojo doesn't dash, he *blinks*: an instant teleport with afterimages,
+  on the ground or mid-air, i-frames included.
+- **Six Eyes** (passive) — regenerates cursed energy ~30% faster than Sukuna.
 - **Domain: Unlimited Void** — the world drops into the void; the enemy is overwhelmed
   by infinite information (stunned, damage over time — but Void never kills on its own).
 

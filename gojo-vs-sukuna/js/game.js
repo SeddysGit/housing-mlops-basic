@@ -28,6 +28,7 @@
         s1: { name: 'Lapse: Blue', ce: 15, cd: 5 },
         s2: { name: 'Reversal: Red', ce: 25, cd: 8 },
         s3: { name: 'Hollow Purple', ce: 40, cd: 18 },
+        s4: { name: 'Blue: Max Output', ce: 45, cd: 14 },
         dom: { name: 'Unlimited Void', ce: 100 },
       },
     },
@@ -852,6 +853,7 @@
       if (slot === 's1') startAction(f, 'blue', 0.65);
       else if (slot === 's2') startAction(f, 'red', 0.6);
       else if (slot === 's3') { startAction(f, 'purple', 1.45); AudioSys.charge(1.0); }
+      else if (slot === 's4') { startAction(f, 'maxBlue', 0.95); AudioSys.charge(0.6); }
     } else {
       if (slot === 's1') startAction(f, 'dismantle', 0.5);
       else if (slot === 's2') startAction(f, 'cleave', 0.0); // dur set below
@@ -1268,6 +1270,26 @@
         break;
       }
 
+      case 'maxBlue': {
+        f.animName = act.t < 0.5 ? 'castCharge' : 'castForward';
+        if (act.t < 0.5) {
+          f.aura = 1;
+          if (Math.random() < 0.6) {
+            const hp3 = f.pos.clone().addScaledVector(fw, 0.9).setY(1.5);
+            spawnP(hp3.clone().add(tmpV.set(rand(-1.6, 1.6), rand(-1, 1.6), rand(-1.6, 1.6))), tmpV.multiplyScalar(-3.5), 0.3, 0.7, 0x2fa8ff);
+          }
+        }
+        if (crossed(act, 0.5, dt)) {
+          AudioSys.blast(360);
+          addShake(0.35, 0.4);
+          screenFlash('rgba(60,150,255,0.35)', 0.5);
+          f.vortexRef = spawnBlueVortex(f, o.pos.clone(), { dur: 2.3, radius: 13, pull: 55, tickDmg: 12, popDmg: 90, popR: 4.5, scale: 1.8 });
+          f.blueT = elapsed;
+          checkGojoFusion(f);
+        }
+        if (act.t >= act.dur) { f.action = null; f.state = 'idle'; f.aura = 0; }
+        break;
+      }
       case 'pierceBlood': {
         f.animName = act.t < 0.25 ? 'castCharge' : 'castForward';
         if (act.t < 0.28 && Math.random() < 0.5) {
@@ -1317,14 +1339,21 @@
   }
 
   /* ---------- Blue vortex (effect entity) ---------- */
-  function spawnBlueVortex(owner, targetPos) {
+  function spawnBlueVortex(owner, targetPos, opts) {
+    opts = opts || {};
+    const DUR = opts.dur || 1.5;
+    const RADIUS = opts.radius || 8;
+    const PULL = opts.pull || 34;
+    const TICK_DMG = opts.tickDmg || 9;
+    const POP_DMG = opts.popDmg || 45;
+    const POP_R = opts.popR || 3;
+    const SCALE = opts.scale || 1;
     targetPos.y = 1.2;
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), new THREE.MeshBasicMaterial({ color: 0x2fa8ff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false }));
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.5 * SCALE, 14, 10), new THREE.MeshBasicMaterial({ color: 0x2fa8ff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false }));
     core.position.copy(targetPos);
     scene.add(core);
-    flashAt(targetPos, 0x2fa8ff, 5, 0.5);
+    flashAt(targetPos, 0x2fa8ff, 5 * SCALE, 0.5);
     let t = 0;
-    const DUR = 1.5;
     let tickT = 0;
     const handle = { dead: false, pos: targetPos };
     addEffect({
@@ -1334,11 +1363,11 @@
         if (t >= DUR) {
           // implosion pop
           AudioSys.blast(500);
-          spawnRing(targetPos, 0x2fa8ff, 5, 0.4, true);
-          burst(targetPos, 0x6fc8ff, 18, 10, 0.5, 0.9);
+          spawnRing(targetPos, 0x2fa8ff, 5 * SCALE, 0.4, true);
+          burst(targetPos, 0x6fc8ff, 18, 10 * SCALE, 0.5, 0.9 * SCALE);
           for (const f of fighters) {
             if (f === owner) continue;
-            if (f.pos.distanceTo(targetPos) < 3) dealDamage(f, owner, 45, { kb: 6, kbUp: 5, infCost: 12 });
+            if (f.pos.distanceTo(targetPos) < POP_R) dealDamage(f, owner, POP_DMG, { kb: 6, kbUp: 5, infCost: 12, knockdown: POP_DMG > 60 });
           }
           return false;
         }
@@ -1346,24 +1375,24 @@
         // swirl particles
         if (Math.random() < 0.8) {
           const a = rand(0, Math.PI * 2);
-          const r = rand(2, 5);
+          const r = rand(2, RADIUS * 0.65);
           tmpV.set(targetPos.x + Math.cos(a) * r, targetPos.y + rand(-1, 1), targetPos.z + Math.sin(a) * r);
           tmpV2.subVectors(targetPos, tmpV).normalize().multiplyScalar(7);
-          spawnP(tmpV, tmpV2, 0.5, 0.5, 0x55bbff);
+          spawnP(tmpV, tmpV2, 0.5, 0.5 * SCALE, 0x55bbff);
         }
         // pull opponent
         for (const f of fighters) {
           if (f === owner || f.state === 'ko') continue;
           const d = f.pos.distanceTo(targetPos);
-          if (d < 8 && !(f.guarding && f.charKey === 'gojo')) {
+          if (d < RADIUS && !(f.guarding && f.charKey === 'gojo')) {
             tmpV.subVectors(targetPos, f.pos).setY(0).normalize();
-            const pull = 34 * (1 - d / 9);
+            const pull = PULL * (1 - d / (RADIUS + 1));
             f.vel.x += tmpV.x * pull * dt * 3.2;
             f.vel.z += tmpV.z * pull * dt * 3.2;
             tickT -= dt;
-            if (d < 2.4 && tickT <= 0) {
+            if (d < 2.4 * SCALE && tickT <= 0) {
               tickT = 0.28;
-              dealDamage(f, owner, 9, { kb: 0, hitstun: 0.2, infCost: 5 });
+              dealDamage(f, owner, TICK_DMG, { kb: 0, hitstun: 0.2, infCost: 5 });
               AudioSys.hit();
             }
           }
@@ -1667,7 +1696,8 @@
     f.invulnT = Math.max(0, f.invulnT - dt);
     f.stunT = Math.max(0, f.stunT - dt);
     if (f.state === 'stunned' && f.stunT <= 0) f.state = 'idle';
-    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + 20 * dt);
+    // Six Eyes: Gojo's peerless efficiency regenerates CE faster
+    if (!f.guarding && !f.action && !f.channeling) f.ce = Math.min(MAX_CE, f.ce + (f.charKey === 'gojo' ? 26 : 20) * dt);
     f.displayHp += (f.hp - f.displayHp) * Math.min(1, dt * 6);
     f.eyeGlow = Math.max(0, f.eyeGlow - dt * 1.4);
     f.sdT = Math.max(0, f.sdT - dt);
@@ -1789,9 +1819,22 @@
         tmpV2.set(0, 0, 0).addScaledVector(fw, inp.mz).addScaledVector(right, inp.mx);
         if (tmpV2.lengthSq() < 0.01) tmpV2.copy(fw).multiplyScalar(-1);
         tmpV2.normalize();
-        f.vel.x = tmpV2.x * 19;
-        f.vel.z = tmpV2.z * 19;
-        burst(f.pos.clone().setY(0.6), 0xffffff, 6, 3, 0.25, 0.5);
+        if (f.charKey === 'gojo') {
+          // Infinity Warp: Gojo blinks instead of sliding
+          burst(f.pos.clone().setY(1.1), 0x4fd4ff, 14, 4, 0.35, 0.7);
+          spawnRing(f.pos.clone().setY(1.0), 0x4fd4ff, 2.5, 0.3, true);
+          f.pos.addScaledVector(tmpV2, 5.5);
+          const wr = Math.sqrt(f.pos.x * f.pos.x + f.pos.z * f.pos.z);
+          if (wr > ARENA_R) { f.pos.x *= ARENA_R / wr; f.pos.z *= ARENA_R / wr; }
+          f.vel.x = tmpV2.x * 6;
+          f.vel.z = tmpV2.z * 6;
+          f.eyeGlow = Math.max(f.eyeGlow, 0.6);
+          burst(f.pos.clone().setY(1.1), 0x9fe4ff, 10, 5, 0.3, 0.6);
+        } else {
+          f.vel.x = tmpV2.x * 19;
+          f.vel.z = tmpV2.z * 19;
+          burst(f.pos.clone().setY(0.6), 0xffffff, 6, 3, 0.25, 0.5);
+        }
       }
       else if (f.buffer.jump > 0 && (f.onGround || f.airJumps > 0)) {
         f.buffer.jump = 0;
@@ -2003,6 +2046,7 @@
           if (d > 4 && d < 14 && f.cds.s1 <= 0 && f.ce >= S.s1.ce && Math.random() < 0.5) inp.s1 = true;
           else if (d > 2 && d < 10 && f.cds.s2 <= 0 && f.ce >= S.s2.ce && Math.random() < 0.45) inp.s2 = true;
           else if ((d > 7 || o.state === 'knockdown' || o.state === 'stunned') && f.cds.s3 <= 0 && f.ce >= S.s3.ce && Math.random() < 0.4) inp.s3 = true;
+          else if (d > 6 && d < 17 && f.cds.s4 <= 0 && f.ce >= S.s4.ce && Math.random() < 0.4) inp.s4 = true;
         } else {
           if (d > 5 && d < 17 && f.cds.s1 <= 0 && f.ce >= S.s1.ce && Math.random() < 0.55) inp.s1 = true;
           else if (d < 5.5 && f.cds.s2 <= 0 && f.ce >= S.s2.ce && Math.random() < 0.5) inp.s2 = true;
