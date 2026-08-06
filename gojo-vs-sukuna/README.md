@@ -87,7 +87,9 @@ then choose your fighter. Best of 3 rounds, 99-second timer.
   barrier that negates the sure-hit (Void's stun, the Shrine's slashes) — for a steady
   CE price.
 - **Reverse Cursed Technique**: hold the heal key to channel CE into health (~150 HP/s).
-  You're rooted and vulnerable while channeling — any hit interrupts it.
+  You're rooted and vulnerable while channeling — any hit interrupts it. Inside an enemy
+  Domain you can channel RCT **together with** your Simple Domain (guard + heal held):
+  heal safely behind the barrier while both drain your reserves.
 - **Black Flash**: every melee hit has a chance to spark a Black Flash — 2.5× damage,
   time briefly distorts, and you gain bonus CE.
 - **Domain Clash**: expand your domain while the enemy's is up (or mid-cast) and the

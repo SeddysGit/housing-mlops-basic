@@ -1750,9 +1750,12 @@
     }
     f.guardBreakT = Math.max(0, f.guardBreakT - dt);
 
-    // Reverse Cursed Technique: hold to convert CE into health (vulnerable while channeling)
+    // Reverse Cursed Technique: hold to convert CE into health (vulnerable while
+    // channeling). Inside an enemy domain it can be channeled together with the
+    // Simple Domain barrier (guard) — heal safely while the barrier drains CE.
     f.channeling = false;
-    if (canAct(f) && inp.rct && !f.guarding && f.hp < MAX_HP && f.ce > 4) {
+    const sdShelter = domain && domain.owner !== f && f.guarding;
+    if (canAct(f) && inp.rct && (!f.guarding || sdShelter) && f.hp < MAX_HP && f.ce > 4) {
       f.channeling = true;
       f.state = 'rct';
       f.ce = Math.max(0, f.ce - 35 * dt);
@@ -1970,10 +1973,12 @@
     const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false, taunt: false };
     if (f.state === 'ko' || gameState !== 'fight') return inp;
 
-    // trapped in an enemy domain: raise Simple Domain (guard) if there's CE for it
+    // trapped in an enemy domain: raise Simple Domain (guard) if there's CE for it,
+    // and patch wounds behind the barrier when hurt
     if (domain && domain.owner !== f && f.ce > 40) {
       if (domain.key === 'void' || distXZ(f.pos, domain.center) < 14) {
         inp.guard = true;
+        if (f.hp < MAX_HP * 0.85 && f.ce > 120) inp.rct = true;
         return inp;
       }
     }
