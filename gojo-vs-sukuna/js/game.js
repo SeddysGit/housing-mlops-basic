@@ -1155,7 +1155,8 @@
         }
         const qx = prevX + sx * tSeg - cx, qy = prevY + sy * tSeg - cy, qz = prevZ + sz * tSeg - cz;
         if (Math.sqrt(qx * qx + qy * qy + qz * qz) < p.r + 0.75) {
-          if (f.guarding && f.charKey === 'gojo') {
+          // Maximum: Purple cannot be nullified by Infinity
+          if (f.guarding && f.charKey === 'gojo' && !p.banishes) {
             // Infinity stops projectiles
             const cost = p.infCost !== undefined ? p.infCost : 8;
             if (f.ce >= cost) {
@@ -1175,7 +1176,10 @@
           if (p.onImpact) {
             p.onImpact(f, p.pos);
           } else {
-            dealDamage(f, p.owner, p.dmg, { kb: p.kb, kbUp: p.kbUp, knockdown: p.knockdown, infCost: p.infCost });
+            // banishing techniques crush straight through guards and barriers
+            const wasGuarding = f.guarding;
+            dealDamage(f, p.owner, p.dmg, { kb: p.kb, kbUp: p.kbUp, knockdown: p.knockdown, infCost: p.infCost, ignoreGuard: p.banishes });
+            if (p.banishes && wasGuarding) announce('GUARD ERASED', '', 1.0, 'sub');
             if (p.type === 'slash') AudioSys.slash(); else AudioSys.blast(200);
             burst(p.pos, p.color, 12, 8, 0.4, 0.8);
             spawnSlashArc(tmpV.copy(f.pos).setY(1.3), p.color, false);

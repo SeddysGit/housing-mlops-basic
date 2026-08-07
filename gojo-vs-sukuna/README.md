@@ -64,7 +64,8 @@ a **hit counter**, and big impacts land with a hit-stop freeze frame.
 - **Maximum: Purple** (`B`, 300 CE) — *"Throughout Heaven and Earth, I Alone Am the
   Honored One."* A long armored chant, then a colossal purple that flattens everything
   in its lane for 400, erases enemy projectiles it touches — and **banishes Mahoraga
-  outright**. The answer to the Divine General.
+  outright**. It **cannot be blocked**: Guard, Infinity, and Simple Domain all fail
+  against imaginary mass. The only answer is to not be in the lane.
 - **Domain: Unlimited Void** — the world drops into the void; the enemy is overwhelmed
   by infinite information (stunned, damage over time — but Void never kills on its own).
 
