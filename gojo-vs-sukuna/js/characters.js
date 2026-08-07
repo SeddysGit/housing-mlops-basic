@@ -373,6 +373,82 @@
     return { rig: rig, group: rig.root, eyes: [eyeL, eyeR] };
   };
 
+  /* ============ MAHORAGA ============ */
+  CharFactory.buildMahoraga = function () {
+    const rig = buildRig();
+    const skin = mat(0xd6d6de);          // pale divine-grey hide
+    const dark = mat(0x17151c);          // black lower wraps
+    const boneM = mat(0xe8e4d4);
+    const eyeM = mat(0xf2f6ff, { emissive: 0xcfe0ff, emissiveIntensity: 2.4 });
+
+    limbMeshes(rig, skin, skin, skin, dark, dark, dark);
+
+    // massive torso
+    const chest = cap(0.24, 0.22, skin);
+    chest.scale.set(1.5, 1, 0.95);
+    chest.position.y = 0.36;
+    rig.torsoG.add(chest);
+    const abs = sph(0.2, skin, 12, 10);
+    abs.scale.set(1.25, 0.95, 0.85);
+    abs.position.y = 0.08;
+    rig.torsoG.add(abs);
+    const wrap = cyl(0.21, 0.21, 0.14, dark, 14);
+    wrap.scale.set(1.3, 1, 0.9);
+    wrap.position.y = -0.03;
+    rig.torsoG.add(wrap);
+
+    // elongated skull head with horns
+    const head = sph(0.16, skin, 14, 12);
+    head.scale.set(0.95, 1.25, 1.05);
+    head.position.y = 0.17;
+    rig.headG.add(head);
+    const jaw = sph(0.09, boneM, 10, 8);
+    jaw.scale.set(1, 0.7, 1.15);
+    jaw.position.set(0, 0.05, 0.09);
+    rig.headG.add(jaw);
+    for (const s of [[-0.09, 0.32, 0.5], [0.09, 0.32, -0.5], [-0.05, 0.36, 0.25], [0.05, 0.36, -0.25]]) {
+      const horn = cone(0.028, 0.16, boneM);
+      horn.position.set(s[0], s[1], -0.02);
+      horn.rotation.z = s[2];
+      rig.headG.add(horn);
+    }
+    const eyeL = sph(0.03, eyeM, 8, 6);
+    eyeL.position.set(-0.055, 0.19, 0.14);
+    rig.headG.add(eyeL);
+    const eyeR = sph(0.03, eyeM, 8, 6);
+    eyeR.position.set(0.055, 0.19, 0.14);
+    rig.headG.add(eyeR);
+
+    // THE WHEEL — the eight-handled dharma wheel floating behind the skull
+    const wheelG = new THREE.Group();
+    wheelG.position.set(0, 0.52, -0.3);
+    const wheelMat = new THREE.MeshBasicMaterial({ color: 0xdfe8ff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.02, 8, 32), wheelMat);
+    wheelG.add(rim);
+    const hub = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.015, 8, 20), wheelMat);
+    wheelG.add(hub);
+    for (let i = 0; i < 8; i++) {
+      const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.21, 6), wheelMat);
+      spoke.position.set(Math.cos(i / 8 * Math.PI * 2) * 0.14, Math.sin(i / 8 * Math.PI * 2) * 0.14, 0);
+      spoke.rotation.z = i / 8 * Math.PI * 2 + Math.PI / 2;
+      wheelG.add(spoke);
+    }
+    rig.headG.add(wheelG);
+
+    // sword arm: a great blade fused to the right forearm
+    const blade = box(0.05, 0.85, 0.16, boneM);
+    blade.position.set(0, -0.55, 0.03);
+    rig.foreR.add(blade);
+    const bladeEdge = box(0.015, 0.85, 0.05, mat(0xffffff, { emissive: 0x9fb8ff, emissiveIntensity: 0.8 }));
+    bladeEdge.position.set(0, -0.55, 0.12);
+    rig.foreR.add(bladeEdge);
+
+    rig.root.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+    addOutlines(rig.root);
+    rig.root.scale.setScalar(1.85); // a giant among men
+    return { rig: rig, group: rig.root, eyes: [eyeL, eyeR], wheel: wheelG };
+  };
+
   /* ============ ANIMATION ============ */
   // Poses map joint name -> [x, y, z] euler targets (radians).
   // Joints: body(pos y via _bodyY, rot), hips, torsoG, headG, armL, foreL, armR, foreR, legL, shinL, legR, shinR

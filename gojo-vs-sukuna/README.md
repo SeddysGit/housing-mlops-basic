@@ -71,6 +71,10 @@ a **hit counter**, and big impacts land with a hit-stop freeze frame.
 - **Fire Arrow** — "Open." A fast flame arrow with an explosive blast radius.
 - **Piercing Blood** — Blood Manipulation: a hypersonic blood beam that leaves the
   target bleeding (`Y`).
+- **Mahoraga** (`B`, 300 CE) — *"With this treasure, I summon…"* The Eight-Handled
+  Divine General rises behind Sukuna and hunts the opponent for 14 seconds: slow,
+  relentless blade swings and ground-slam shockwaves. At the 7-second mark **the wheel
+  turns and Mahoraga adapts** — faster, harder-hitting. You can't kill it; survive it.
 - **Domain: Malevolent Shrine** — a barrierless domain: slashes rain on everything inside
   the red ring. No shelter — run for the edge or eat the storm.
 

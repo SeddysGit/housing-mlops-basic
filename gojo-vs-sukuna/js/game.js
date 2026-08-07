@@ -42,6 +42,7 @@
         s2: { name: 'Cleave', ce: 25, cd: 8 },
         s3: { name: 'Fire Arrow', ce: 40, cd: 18 },
         s4: { name: 'Piercing Blood', ce: 30, cd: 9 },
+        sum: { name: 'Mahoraga', ce: 300, cd: 60 },
         dom: { name: 'Malevolent Shrine', ce: 100 },
       },
     },
@@ -58,6 +59,7 @@
   let effects = [];
   let domain = null;
   let clashFx = null; // live domain-clash cinematic
+  let summon = null;  // Mahoraga, when walking the earth
   let gameState = 'menu'; // menu, select, intro, fight, roundEnd, matchEnd
   let paused = false;
   let roundNum = 1;
@@ -94,8 +96,8 @@
   const held = new Set();
   const pressed = new Set();
 
-  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', s4: 'KeyY', dom: 'KeyP', rct: 'KeyN', taunt: 'KeyT' };
-  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', s4: 'Backslash', dom: 'Enter', rct: 'BracketLeft', taunt: 'Digit0' };
+  const P1MAP = { fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD', jump: 'Space', dash: 'ShiftLeft', light: 'KeyJ', heavy: 'KeyK', guard: 'KeyL', s1: 'KeyU', s2: 'KeyI', s3: 'KeyO', s4: 'KeyY', sum: 'KeyB', dom: 'KeyP', rct: 'KeyN', taunt: 'KeyT' };
+  const P2MAP = { fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', jump: 'ShiftRight', dash: 'ControlRight', light: 'Comma', heavy: 'Period', guard: 'Slash', s1: 'Semicolon', s2: 'Quote', s3: 'BracketRight', s4: 'Backslash', sum: 'Digit9', dom: 'Enter', rct: 'BracketLeft', taunt: 'Digit0' };
 
   const GAME_CODES = new Set();
   [P1MAP, P2MAP].forEach(m => Object.keys(m).forEach(k => GAME_CODES.add(m[k])));
@@ -128,12 +130,13 @@
       s2: pressed.has(map.s2),
       s3: pressed.has(map.s3),
       s4: pressed.has(map.s4),
+      sum: pressed.has(map.sum),
       dom: pressed.has(map.dom),
       taunt: pressed.has(map.taunt),
     };
   }
 
-  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false, taunt: false };
+  const NULL_INPUT = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, sum: false, dom: false, taunt: false };
 
   /* ================= THREE SETUP ================= */
   function initThree() {
@@ -727,7 +730,7 @@
       dmgMul: 1,                  // survival wave scaling
       state: 'idle', // idle|dash|attack|skill|guard|hitstun|knockdown|stunned|domainCast|ko|win|repelled
       action: null,  // {name,t,dur,data}
-      cds: { s1: 0, s2: 0, s3: 0, s4: 0 },
+      cds: { s1: 0, s2: 0, s3: 0, s4: 0, sum: 0 },
       guarding: false,
       guardBreakT: 0,
       invulnT: 0,
@@ -740,7 +743,7 @@
       animSeed: rand(0, 10),
       ai: null,
       input: NULL_INPUT,
-      buffer: { jump: 0, dash: 0, light: 0, heavy: 0, s1: 0, s2: 0, s3: 0, s4: 0, dom: 0, taunt: 0 },
+      buffer: { jump: 0, dash: 0, light: 0, heavy: 0, s1: 0, s2: 0, s3: 0, s4: 0, sum: 0, dom: 0, taunt: 0 },
     };
     return f;
   }
@@ -758,7 +761,7 @@
     f.channeling = false;
     f.state = 'idle';
     f.action = null;
-    f.cds = { s1: 0, s2: 0, s3: 0, s4: 0 };
+    f.cds = { s1: 0, s2: 0, s3: 0, s4: 0, sum: 0 };
     f.blueT = -99; f.redT = -99;
     f.dismT = -99; f.cleaveT = -99;
     f.vortexRef = null; f.redRef = null;
@@ -889,7 +892,7 @@
         startAction(target, 'hitstun', opts.hitstun || 0.34);
         target.state = 'hitstun';
       }
-      pushBack(target, attacker, opts.kb || 4, opts.kbUp || 0);
+      pushBack(target, attacker, opts.kb || 4, opts.kbUp || 0, opts.kbFrom);
     }
 
     if (target.hp <= 0) {
@@ -899,9 +902,9 @@
     return { hit: true, blackFlash: blackFlash, dmg: amount };
   }
 
-  function pushBack(target, attacker, kb, kbUp) {
-    if (!attacker) return;
-    tmpV.subVectors(target.pos, attacker.pos);
+  function pushBack(target, attacker, kb, kbUp, fromPos) {
+    if (!attacker && !fromPos) return;
+    tmpV.subVectors(target.pos, fromPos || attacker.pos);
     tmpV.y = 0;
     if (tmpV.lengthSq() < 0.001) tmpV.set(0, 0, 1);
     tmpV.normalize();
@@ -1273,6 +1276,16 @@
           spawnRing(f.pos.clone().setY(0.1), f.cfg.color, 4, 0.4, false);
         }
         if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
+        break;
+      }
+      case 'summonCast': {
+        f.animName = 'domainSign';
+        f.aura = 1;
+        if (Math.random() < 0.7) {
+          spawnP(f.pos.clone().add(tmpV.set(rand(-1.8, 1.8), rand(0, 2.5), rand(-1.8, 1.8))), tmpV2.set(0, rand(1.5, 3.5), 0), 0.5, 0.6, Math.random() < 0.5 ? 0x9aa4c8 : 0x2a2438);
+        }
+        if (crossed(act, 1.3, dt)) spawnMahoraga(f);
+        if (act.t >= act.dur) { f.action = null; f.state = 'idle'; f.aura = 0; }
         break;
       }
       case 'clashLock': {
@@ -1688,6 +1701,147 @@
         blade.geometry.dispose(); bladeMat.dispose();
       },
     });
+  }
+
+  /* ================= MAHORAGA ================= */
+  function trySummon(f) {
+    const sk = f.cfg.skills.sum;
+    if (!sk || summon || f.cds.sum > 0 || f.ce < sk.ce) return;
+    f.ce -= sk.ce;
+    f.cds.sum = sk.cd;
+    f.state = 'skill';
+    f.eyeGlow = 1.6;
+    startAction(f, 'summonCast', 1.5, { armor: true });
+    AudioSys.domain();
+    announce('DIVINE GENERAL MAHORAGA', '“With this treasure, I summon…”', 2.2, 'shrine');
+    addShake(0.3, 1.0);
+    screenFlash('rgba(120,120,160,0.4)', 0.8);
+  }
+
+  function spawnMahoraga(owner) {
+    const model = CharFactory.buildMahoraga();
+    scene.add(model.group);
+    // rises behind its master
+    tmpV.copy(owner.pos).setY(0);
+    const back = tmpV.lengthSq() > 0.1 ? tmpV.clone().normalize() : new THREE.Vector3(0, 0, -1);
+    const px = clamp(owner.pos.x + back.x * 3.5, -ARENA_R + 1, ARENA_R - 1);
+    const pz = clamp(owner.pos.z + back.z * 3.5, -ARENA_R + 1, ARENA_R - 1);
+    summon = {
+      model: model, owner: owner, target: opponentOf(owner),
+      pos: new THREE.Vector3(px, 0, pz), vel: V3(), facing: owner.facing,
+      t: 0, dur: 14, attackCd: 1.4, slamCd: 5, adapted: false,
+      animName: 'idle', animSeed: rand(0, 10), animSpeed: 0.8, animStrafe: 0, animBack: false,
+      state: 'idle', action: null, onGround: true,
+      leanX: 0, leanZ: 0, tumble: 0, landT: 0, eyeGlow: 1, charKey: 'mahoraga', stepT: 0,
+    };
+    summon.model.group.position.copy(summon.pos);
+    AudioSys.explosion();
+    addShake(0.6, 0.7);
+    flashAt(summon.pos, 0xcfd8ff, 8, 0.8);
+    spawnRing(summon.pos.clone().setY(0.1), 0xcfd8ff, 8, 0.6, false);
+    burst(summon.pos.clone().setY(1.5), 0x9aa4c8, 26, 10, 0.8, 1.1, { gravity: -6 });
+  }
+
+  function despawnSummon(withFx) {
+    if (!summon) return;
+    if (withFx) {
+      burst(summon.pos.clone().setY(1.8), 0xcfd8ff, 22, 8, 0.7, 0.9);
+      spawnRing(summon.pos.clone().setY(1.5), 0x9aa4c8, 5, 0.5, true);
+      AudioSys.blast(120);
+    }
+    scene.remove(summon.model.group);
+    disposeObject(summon.model.group);
+    summon = null;
+  }
+
+  function updateSummon(dt) {
+    if (!summon) return;
+    const s = summon;
+    s.t += dt;
+    const target = s.target;
+
+    // the wheel turns... and Mahoraga adapts
+    if (!s.adapted && s.t > 7) {
+      s.adapted = true;
+      announce('MAHORAGA ADAPTS', 'the wheel has turned', 1.4, 'shrine');
+      AudioSys.blackFlash();
+      s.eyeGlow = 1.6;
+      burst(s.pos.clone().setY(3), 0xdfe8ff, 16, 8, 0.6, 0.8);
+    }
+    s.model.wheel.rotation.z += dt * (s.adapted ? 7 : 1.6);
+    s.eyeGlow = Math.max(0.8, s.eyeGlow - dt);
+    const speed = s.adapted ? 4.8 : 3.1;
+    const dmgMul = (s.adapted ? 1.5 : 1) * (s.owner.dmgMul || 1);
+
+    // face the prey
+    const ang = Math.atan2(target.pos.x - s.pos.x, target.pos.z - s.pos.z);
+    let dAng = ang - s.facing;
+    while (dAng > Math.PI) dAng -= Math.PI * 2;
+    while (dAng < -Math.PI) dAng += Math.PI * 2;
+    s.facing += dAng * Math.min(1, dt * 6);
+    const d = distXZ(s.pos, target.pos);
+
+    if (s.action) {
+      s.action.t += dt;
+      const at = s.action.t;
+      if (s.action.name === 'swing') {
+        s.animName = at < 0.45 ? 'heavy' : 'slashR';
+        if (at >= 0.5 && !s.action.hit) {
+          s.action.hit = true;
+          AudioSys.heavyHit();
+          spawnSlashArc(s.pos.clone().addScaledVector(forwardOf(s), 2.2).setY(2), 0xdfe8ff, true);
+          if (distXZ(s.pos, target.pos) < 3.6 && target.state !== 'ko') {
+            dealDamage(target, s.owner, 70 * dmgMul, { kb: 13, kbUp: 5, knockdown: true, infCost: 30, kbFrom: s.pos });
+          }
+        }
+        if (at >= 0.95) s.action = null;
+      } else { // slam
+        s.animName = at < 0.55 ? 'heavy' : 'heavyHit';
+        if (at >= 0.6 && !s.action.hit) {
+          s.action.hit = true;
+          AudioSys.explosion();
+          addShake(0.5, 0.4);
+          spawnRing(s.pos.clone().setY(0.1), 0xcfd8ff, 9, 0.55, false);
+          burst(s.pos.clone().setY(0.5), 0x9aa4c8, 18, 9, 0.5, 0.8);
+          if (distXZ(s.pos, target.pos) < 6.5 && target.state !== 'ko') {
+            dealDamage(target, s.owner, 55 * dmgMul, { kb: 15, kbUp: 8, knockdown: true, infCost: 25, kbFrom: s.pos });
+          }
+        }
+        if (at >= 1.2) s.action = null;
+      }
+      s.vel.set(0, 0, 0);
+    } else if (d > 3) {
+      // relentless pursuit
+      tmpV.subVectors(target.pos, s.pos).setY(0).normalize();
+      s.vel.x = tmpV.x * speed;
+      s.vel.z = tmpV.z * speed;
+      s.pos.addScaledVector(s.vel, dt);
+      s.animName = 'run';
+      s.animSpeed = s.adapted ? 0.9 : 0.65;
+      s.stepT -= dt;
+      if (s.stepT <= 0) { s.stepT = s.adapted ? 0.32 : 0.46; addShake(0.04, 0.08); }
+    } else {
+      s.vel.set(0, 0, 0);
+      s.animName = 'idle';
+      s.attackCd -= dt;
+      s.slamCd -= dt;
+      if (s.slamCd <= 0) { s.slamCd = 5.5; s.action = { name: 'slam', t: 0, hit: false }; AudioSys.charge(0.5); }
+      else if (s.attackCd <= 0) { s.attackCd = 2.0; s.action = { name: 'swing', t: 0, hit: false }; AudioSys.swoosh(); }
+    }
+
+    // arena bounds + keep some space from the target
+    const rr = Math.sqrt(s.pos.x * s.pos.x + s.pos.z * s.pos.z);
+    if (rr > ARENA_R - 0.5) { s.pos.x *= (ARENA_R - 0.5) / rr; s.pos.z *= (ARENA_R - 0.5) / rr; }
+    if (d < 1.5 && d > 0.01) {
+      tmpV.subVectors(target.pos, s.pos).setY(0).normalize();
+      target.pos.addScaledVector(tmpV, (1.5 - d) * 0.5);
+    }
+
+    s.model.group.position.copy(s.pos);
+    s.model.group.rotation.y = s.facing;
+    CharFactory.animateFighter(s, elapsed, dt);
+
+    if (s.t >= s.dur) despawnSummon(true);
   }
 
   /* ================= DOMAINS ================= */
@@ -2160,6 +2314,7 @@
       else if (take('s2')) trySkill(f, 's2');
       else if (take('s3')) trySkill(f, 's3');
       else if (take('s4')) trySkill(f, 's4');
+      else if (take('sum')) trySummon(f);
       else if (take('dom')) tryDomain(f);
       else if (take('taunt')) {
         f.state = 'attack';
@@ -2330,7 +2485,7 @@
   function aiInput(f, dt) {
     const ai = f.ai;
     const o = opponentOf(f);
-    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, dom: false, taunt: false };
+    const inp = { mx: 0, mz: 0, jump: false, dash: false, light: false, heavy: false, guard: false, rct: false, s1: false, s2: false, s3: false, s4: false, sum: false, dom: false, taunt: false };
     if (f.state === 'ko' || gameState !== 'fight') return inp;
 
     // trapped in an enemy domain: raise Simple Domain (guard) if there's CE for it,
@@ -2397,6 +2552,12 @@
       // showboat when comfortably ahead
       if (d > 10 && f.hp > o.hp + 150 && !domain && Math.random() < 0.06) {
         inp.taunt = true;
+        return inp;
+      }
+      // the trump card: summon Mahoraga when the fight turns serious
+      if (f.cfg.skills.sum && !summon && f.cds.sum <= 0 && f.ce >= f.cfg.skills.sum.ce &&
+          (f.hp < MAX_HP * 0.6 || o.hp < MAX_HP * 0.5) && Math.random() < 0.35) {
+        inp.sum = true;
         return inp;
       }
       // punish big casts by rushing or ranged skill
@@ -2528,8 +2689,8 @@
     side.skills.innerHTML = '';
     const map = f.idx === 0 ? P1MAP : P2MAP;
     const keyLabels = f.idx === 0
-      ? { s1: 'U', s2: 'I', s3: 'O', s4: 'Y', dom: 'P' }
-      : (mode.vsAI ? { s1: '', s2: '', s3: '', s4: '', dom: '' } : { s1: ';', s2: "'", s3: ']', s4: '\\', dom: '⏎' });
+      ? { s1: 'U', s2: 'I', s3: 'O', s4: 'Y', sum: 'B', dom: 'P' }
+      : (mode.vsAI ? { s1: '', s2: '', s3: '', s4: '', sum: '', dom: '' } : { s1: ';', s2: "'", s3: ']', s4: '\\', sum: '9', dom: '⏎' });
     for (const slot of Object.keys(f.cfg.skills)) {
       const sk = f.cfg.skills[slot];
       const el = document.createElement('div');
@@ -2680,6 +2841,7 @@
   function startRound() {
     clearProjectiles();
     clearClash();
+    despawnSummon(false);
     endDomain();
     resetFighter(fighters[0], -5, 0, Math.PI / 2);
     resetFighter(fighters[1], 5, 0, -Math.PI / 2);
@@ -2695,6 +2857,7 @@
     // next survival wave: enemy resets stronger, the player keeps momentum + a breather heal
     clearProjectiles();
     clearClash();
+    despawnSummon(false);
     endDomain();
     const player = fighters[0];
     const keepHp = player.hp, keepCe = player.ce;
@@ -2718,6 +2881,7 @@
     wins[winner.idx]++;
     winner.state = 'win';
     winner.action = null;
+    despawnSummon(true);
     announce('KO', '', 1.4, 'ko');
     updatePips();
   }
@@ -2727,6 +2891,7 @@
     const winner = a.hp >= b.hp ? a : b;
     const loser = opponentOf(winner);
     clearClash();
+    despawnSummon(true);
     endDomain();
     winner.action = null;
     loser.action = null;
@@ -2788,6 +2953,7 @@
   function backToMenu() {
     gameState = 'menu';
     clearClash();
+    despawnSummon(false);
     endDomain();
     clearProjectiles();
     showScreen('menu');
@@ -2881,6 +3047,7 @@
       updateProjectiles(dt);
       updateDomain(dt);
       updateClash(dt);
+      updateSummon(dt);
     } else if (gameState === 'roundEnd') {
       roundEndT -= dt;
       for (const f of fighters) { f.input = NULL_INPUT; updateFighter(f, dt); }
@@ -2949,6 +3116,7 @@
     get state() { return gameState; },
     get projectiles() { return projectiles; },
     get clash() { return clashFx; },
+    get summon() { return summon; },
     giveCE: function (idx, amt) { if (fighters[idx]) fighters[idx].ce = amt; },
   };
 })();
