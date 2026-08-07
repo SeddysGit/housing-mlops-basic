@@ -4,17 +4,55 @@
 (function () {
   const CharFactory = {};
 
+  // stepped gradient for anime cel shading
+  let gradientTex = null;
+  function toonGradient() {
+    if (gradientTex) return gradientTex;
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 1;
+    const g = c.getContext('2d');
+    const shades = [58, 110, 170, 228];
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = 'rgb(' + shades[i] + ',' + shades[i] + ',' + shades[i] + ')';
+      g.fillRect(i, 0, 1, 1);
+    }
+    gradientTex = new THREE.CanvasTexture(c);
+    gradientTex.minFilter = THREE.NearestFilter;
+    gradientTex.magFilter = THREE.NearestFilter;
+    return gradientTex;
+  }
+
   function mat(color, opts) {
     opts = opts || {};
-    return new THREE.MeshStandardMaterial({
+    return new THREE.MeshToonMaterial({
       color: color,
-      roughness: opts.roughness !== undefined ? opts.roughness : 0.85,
-      metalness: opts.metalness !== undefined ? opts.metalness : 0.0,
+      gradientMap: toonGradient(),
       emissive: opts.emissive !== undefined ? opts.emissive : 0x000000,
       emissiveIntensity: opts.emissiveIntensity !== undefined ? opts.emissiveIntensity : 1.0,
       transparent: !!opts.transparent,
       opacity: opts.opacity !== undefined ? opts.opacity : 1.0,
     });
+  }
+
+  // ink outlines: inverted-hull clones on every substantial body part
+  const outlineMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+  function addOutlines(root) {
+    const targets = [];
+    root.traverse(function (o) {
+      if (!o.isMesh || !o.material || !o.material.isMeshToonMaterial) return;
+      if (o.material.emissiveIntensity > 1) return; // glowing eyes stay clean
+      o.geometry.computeBoundingBox();
+      const b = o.geometry.boundingBox;
+      const minDim = Math.min(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
+      if (minDim < 0.05) return; // skip thin decals (marks, zipper, bands)
+      targets.push(o);
+    });
+    for (const m of targets) {
+      const out = new THREE.Mesh(m.geometry, outlineMat);
+      out.scale.setScalar(1.12);
+      out.castShadow = false;
+      m.add(out);
+    }
   }
 
   function box(w, h, d, material) {
@@ -212,6 +250,7 @@
     rig.headG.add(eyeR);
 
     rig.root.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+    addOutlines(rig.root);
     return { rig: rig, group: rig.root, eyes: [eyeL, eyeR] };
   };
 
@@ -330,6 +369,7 @@
     rig.headG.add(fmkR);
 
     rig.root.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+    addOutlines(rig.root);
     return { rig: rig, group: rig.root, eyes: [eyeL, eyeR] };
   };
 

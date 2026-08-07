@@ -49,6 +49,9 @@
 
   /* ================= GLOBALS ================= */
   let scene, camera, renderer, clock;
+  let composer = null;
+  let glowOn = true;
+  try { glowOn = localStorage.getItem('jjk-glow') !== 'off'; } catch (e) {}
   let fighters = [];
   let projectiles = [];
   let effects = [];
@@ -147,10 +150,19 @@
     renderer.toneMappingExposure = 1.15;
     document.getElementById('game').appendChild(renderer.domElement);
 
+    // bloom pipeline (postfx.js): render -> UnrealBloom -> gamma correction
+    if (THREE.EffectComposer && THREE.UnrealBloomPass) {
+      composer = new THREE.EffectComposer(renderer);
+      composer.addPass(new THREE.RenderPass(scene, camera));
+      composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.78));
+      composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+    }
+
     window.addEventListener('resize', function () {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      if (composer) composer.setSize(window.innerWidth, window.innerHeight);
     });
 
     clock = new THREE.Clock();
@@ -223,12 +235,12 @@
 
   function buildArena() {
     // lights
-    arena.hemi = new THREE.HemisphereLight(0x8fa3d0, 0x1a1626, 0.75);
+    arena.hemi = new THREE.HemisphereLight(0x8fa3d0, 0x1a1626, 0.5);
     scene.add(arena.hemi);
-    arena.moonLight = new THREE.DirectionalLight(0xbdd3ff, 1.15);
+    arena.moonLight = new THREE.DirectionalLight(0xbdd3ff, 0.95);
     arena.moonLight.position.set(14, 26, 10);
     arena.moonLight.castShadow = true;
-    arena.moonLight.shadow.mapSize.set(1024, 1024);
+    arena.moonLight.shadow.mapSize.set(2048, 2048);
     arena.moonLight.shadow.camera.left = -24;
     arena.moonLight.shadow.camera.right = 24;
     arena.moonLight.shadow.camera.top = 24;
@@ -414,7 +426,7 @@
     g.fillStyle = gr;
     g.fillRect(0, 0, 64, 64);
     particleTex = new THREE.CanvasTexture(c);
-    for (let i = 0; i < 260; i++) {
+    for (let i = 0; i < 380; i++) {
       const mat = new THREE.SpriteMaterial({ map: particleTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
       const s = new THREE.Sprite(mat);
       s.visible = false;
@@ -2156,6 +2168,24 @@
 
   /* ================= CAMERA ================= */
   function updateCamera(dt) {
+    // round-intro flyby: sweep past each fighter's face-off pose
+    if (gameState === 'intro' && fighters.length === 2) {
+      const t = 2.3 - introT;
+      if (t < 2.0) {
+        const f = t < 1.0 ? fighters[0] : fighters[1];
+        const k = t < 1.0 ? t : t - 1.0;
+        const ang = f.facing + 0.55 + k * 0.55; // arc across the fighter's front
+        camera.position.set(
+          f.pos.x + Math.sin(ang) * 3.9,
+          1.5 + k * 0.35,
+          f.pos.z + Math.cos(ang) * 3.9
+        );
+        tmpV.set(f.pos.x, 1.25, f.pos.z);
+        camera.lookAt(tmpV);
+        camPos.copy(camera.position);
+        return;
+      }
+    }
     const a = fighters[0], b = fighters[1];
     tmpV.addVectors(a.pos, b.pos).multiplyScalar(0.5);
     tmpV.y += 1.3;
@@ -2499,6 +2529,13 @@
     $('btn-1p').addEventListener('click', function () { mode.vsAI = true; mode.survival = false; showScreen('select'); });
     $('btn-2p').addEventListener('click', function () { mode.vsAI = false; mode.survival = false; showScreen('select'); });
     $('btn-survival').addEventListener('click', function () { mode.vsAI = true; mode.survival = true; showScreen('select'); });
+    const glowBtn = $('btn-glow');
+    glowBtn.textContent = 'Glow: ' + (glowOn ? 'ON' : 'OFF');
+    glowBtn.addEventListener('click', function () {
+      glowOn = !glowOn;
+      glowBtn.textContent = 'Glow: ' + (glowOn ? 'ON' : 'OFF');
+      try { localStorage.setItem('jjk-glow', glowOn ? 'on' : 'off'); } catch (e) {}
+    });
     for (const diff of ['easy', 'normal', 'hard']) {
       $('diff-' + diff).addEventListener('click', function () {
         mode.difficulty = diff;
@@ -2524,7 +2561,11 @@
     const rawDt = dt;
     elapsed += dt;
 
-    if (paused) { pressed.clear(); renderer.render(scene, camera); return; }
+    if (paused) {
+      pressed.clear();
+      if (composer && glowOn) composer.render(); else renderer.render(scene, camera);
+      return;
+    }
     updateFlash(rawDt);
 
     // slow motion
@@ -2544,6 +2585,13 @@
       if (introT <= 1.0 && introT + dt > 1.0) announce('FIGHT!', '', 0.8, 'fight');
       if (introT <= 0) gameState = 'fight';
       for (const f of fighters) { f.input = NULL_INPUT; updateFighter(f, dt); }
+      // face-off poses under the flyby camera
+      if (introT > 0.35) {
+        for (const f of fighters) {
+          f.animName = f.charKey === 'gojo' ? 'infinity' : 'domainSign';
+          f.eyeGlow = Math.max(f.eyeGlow, 0.8);
+        }
+      }
       fighterCollision();
     } else if (gameState === 'fight') {
       if (!mode.survival) {
@@ -2601,7 +2649,8 @@
     updateAnnounce(rawDt);
     updateDmgNums(rawDt);
     pressed.clear();
-    renderer.render(scene, camera);
+    if (composer && glowOn) composer.render();
+    else renderer.render(scene, camera);
   }
 
   /* ================= BOOT ================= */
