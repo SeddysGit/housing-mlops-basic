@@ -2223,6 +2223,7 @@
   let projectiles = [];
   let effects = [];
   let domain = null;
+  let clashFx = null; // live domain-clash cinematic
   let gameState = 'menu'; // menu, select, intro, fight, roundEnd, matchEnd
   let paused = false;
   let roundNum = 1;
@@ -3440,6 +3441,11 @@
         if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
         break;
       }
+      case 'clashLock': {
+        f.animName = 'domainSign';
+        if (act.t >= act.dur) { f.action = null; f.state = 'idle'; }
+        break;
+      }
       case 'repelled':
       case 'hitstun':
       case 'guardBreak': {
@@ -3853,7 +3859,7 @@
   /* ================= DOMAINS ================= */
   function activateDomain(f) {
     if (gameState !== 'fight') return;
-    if (domain && domain.owner !== f) { resolveClash(f); return; }
+    if (domain && domain.owner !== f) { startDomainClash(domain.owner, f); return; }
     const key = f.charKey === 'gojo' ? 'void' : 'shrine';
     domain = { owner: f, key: key, t: 0, dur: 6.5, tick: 0, center: f.pos.clone() };
     screenFlash(key === 'void' ? 'rgba(255,255,255,0.95)' : 'rgba(255,30,20,0.7)', 1.0);
@@ -3862,25 +3868,178 @@
     if (key === 'void') applyVoid(); else applyShrine(f);
   }
 
-  function resolveClash(challenger) {
-    const holder = domain.owner;
-    announce('DOMAIN CLASH!', '', 1.4, 'clash');
-    screenFlash('rgba(255,255,255,1)', 1.2);
-    addShake(0.9, 1.0);
-    AudioSys.explosion();
-    slowmo.t = 0.9;
-    slowmo.factor = 0.25;
+  /* ---------- DOMAIN CLASH: both worlds manifest and push against each other ---------- */
+  function startDomainClash(holder, challenger) {
+    domain = null; // neither domain ticks while the boundary is contested
+    announce('DOMAIN CLASH!', '', 2.6, 'clash');
+    screenFlash('rgba(255,255,255,0.9)', 0.8);
+    addShake(0.5, 0.8);
+    AudioSys.domain();
+
     const scoreH = holder.hp / MAX_HP + rand(0, 0.55);
     const scoreC = challenger.hp / MAX_HP + rand(0, 0.55);
-    endDomain();
     const winner = scoreC > scoreH ? challenger : holder;
     const loser = opponentOf(winner);
-    dealDamage(loser, winner, 85, { kb: 10, kbUp: 6, knockdown: true, ignoreGuard: true });
-    if (gameState !== 'fight') return; // clash burst was a KO
-    // winner's domain takes hold (shortened)
-    const key = winner.charKey === 'gojo' ? 'void' : 'shrine';
-    domain = { owner: winner, key: key, t: 0, dur: 4.5, tick: 0, center: winner.pos.clone() };
-    if (key === 'void') applyVoid(); else applyShrine(winner);
+
+    const gojoF = fighters[0].charKey === 'gojo' ? fighters[0] : fighters[1];
+    const sukunaF = opponentOf(gojoF);
+
+    // both worlds at once
+    arena.voidGroup.visible = true;
+    arena.shrine.visible = true;
+    tmpV.copy(sukunaF.pos).setY(0);
+    const outward = tmpV.lengthSq() > 0.1 ? tmpV.clone().normalize() : new THREE.Vector3(0, 0, -1);
+    arena.shrine.position.copy(sukunaF.pos).addScaledVector(outward, 6).setY(0);
+    arena.shrine.lookAt(0, 0, 0);
+    arena.city.visible = false;
+    arena.sky.visible = false;
+    arena.stars.visible = false;
+    arena.moon.visible = false;
+    scene.fog.color.set(0x14060f);
+    scene.fog.density = 0.002;
+    arena.hemi.intensity = 0.32;
+    arena.hemi.color.set(0xb08fd0);
+    arena.groundMat.color.set(0x0b0918);
+    arena.groundMat.transparent = true;
+    arena.groundMat.opacity = 0.55;
+    arena.groundMat.needsUpdate = true;
+    // split lighting: violet behind Gojo, blood-red behind Sukuna
+    arena.rimCyan.position.set(gojoF.pos.x * 1.4, 6, gojoF.pos.z * 1.4);
+    arena.rimCyan.intensity = 1.1;
+    arena.rimRed.position.set(sukunaF.pos.x * 1.4, 6, sukunaF.pos.z * 1.4);
+    arena.rimRed.intensity = 1.1;
+    if (bloomPass) bloomPass.strength = 0.5;
+
+    // the contested boundary membrane between them
+    const mid = new THREE.Vector3().addVectors(gojoF.pos, sukunaF.pos).multiplyScalar(0.5).setY(0);
+    const dirGS = new THREE.Vector3().subVectors(sukunaF.pos, gojoF.pos).setY(0);
+    if (dirGS.lengthSq() < 0.01) dirGS.set(1, 0, 0);
+    dirGS.normalize();
+    const grp = new THREE.Group();
+    grp.position.copy(mid);
+    grp.lookAt(mid.clone().add(dirGS)); // plane normal along the fight axis
+    const mkPlane = function (w, h, color, op, z) {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: op, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+      );
+      m.position.set(0, h / 2, z);
+      grp.add(m);
+      return m;
+    };
+    const core = mkPlane(22, 10, 0xe8dcff, 0.13, 0);
+    const gojoFace = mkPlane(22, 10, 0x4fd4ff, 0.11, -0.35); // faces Gojo's side
+    const sukunaFace = mkPlane(22, 10, 0xff3322, 0.11, 0.35);
+    scene.add(grp);
+
+    // push direction: the boundary caves toward the loser
+    const pushDir = winner === gojoF ? dirGS.clone() : dirGS.clone().negate();
+
+    clashFx = {
+      t: 0, dur: 3.0, winner: winner, loser: loser,
+      grp: grp, core: core, faces: [gojoFace, sukunaFace],
+      mid: mid, pushDir: pushDir, dirGS: dirGS,
+      gojoF: gojoF, sukunaF: sukunaF, rumbleT: 0,
+    };
+
+    // both combatants locked channeling their domains
+    for (const f of fighters) {
+      f.action = null;
+      f.guarding = false;
+      f.channeling = false;
+      startAction(f, 'clashLock', 3.2, { armor: true });
+      f.state = 'skill';
+      f.eyeGlow = 1.4;
+    }
+  }
+
+  function disposeClashMeshes() {
+    if (!clashFx) return;
+    scene.remove(clashFx.grp);
+    clashFx.grp.traverse(function (o) {
+      if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); }
+    });
+  }
+
+  function clearClash() {
+    if (!clashFx) return;
+    disposeClashMeshes();
+    clashFx = null;
+    for (const f of fighters) {
+      if (f.action && f.action.name === 'clashLock') { f.action = null; f.state = 'idle'; }
+    }
+    restoreArena();
+  }
+
+  function updateClash(dt) {
+    if (!clashFx) return;
+    const cx = clashFx;
+    cx.t += dt;
+    const k = Math.min(1, cx.t / cx.dur);
+    const ease = k * k;
+
+    // boundary surges and caves toward the loser
+    const wobble = Math.sin(elapsed * 14) * 0.35 * (1 - k);
+    cx.grp.position.copy(cx.mid).addScaledVector(cx.pushDir, ease * 5.5 + wobble);
+    cx.core.scale.y = 1 + Math.sin(elapsed * 18) * 0.07;
+    cx.core.material.opacity = 0.1 + Math.sin(elapsed * 22) * 0.05 + ease * 0.1;
+    cx.faces[0].material.opacity = 0.09 + Math.sin(elapsed * 17) * 0.04;
+    cx.faces[1].material.opacity = 0.09 + Math.cos(elapsed * 15) * 0.04;
+
+    // sparks grinding along the contested boundary
+    if (Math.random() < 0.85) {
+      const perp = tmpV2.set(-cx.dirGS.z, 0, cx.dirGS.x);
+      tmpV.copy(cx.grp.position)
+        .addScaledVector(perp, rand(-12, 12));
+      tmpV.y = rand(0.3, 9);
+      spawnP(tmpV, tmpV2.set(rand(-2, 2), rand(-1, 3), rand(-2, 2)), 0.35, rand(0.18, 0.4), Math.random() < 0.5 ? 0x4fd4ff : 0xff3322);
+    }
+    // each fighter streams energy into the boundary
+    for (const f of [cx.gojoF, cx.sukunaF]) {
+      if (Math.random() < 0.5) {
+        tmpV.set(f.pos.x + rand(-0.4, 0.4), rand(0.8, 1.8), f.pos.z + rand(-0.4, 0.4));
+        tmpV2.subVectors(cx.grp.position, tmpV).setY(rand(1, 5)).normalize().multiplyScalar(9);
+        spawnP(tmpV, tmpV2, 0.5, 0.35, f.charKey === 'gojo' ? 0x4fd4ff : 0xff3322);
+      }
+      f.invulnT = Math.max(f.invulnT, 0.2);
+      f.eyeGlow = Math.max(f.eyeGlow, 1);
+    }
+    // building rumble
+    cx.rumbleT -= dt;
+    if (cx.rumbleT <= 0) { cx.rumbleT = 0.7; AudioSys.blast(70 + k * 80); }
+    addShake(0.06 + k * 0.2, 0.1);
+
+    if (cx.t >= cx.dur) {
+      // the boundary shatters
+      const winner = cx.winner, loser = cx.loser;
+      screenFlash('rgba(255,255,255,1)', 0.9);
+      AudioSys.explosion();
+      AudioSys.heavyHit();
+      addShake(0.9, 0.9);
+      slowmo.t = 0.6;
+      slowmo.factor = 0.3;
+      const perp = new THREE.Vector3(-cx.dirGS.z, 0, cx.dirGS.x);
+      for (let i = 0; i < 30; i++) {
+        tmpV.copy(cx.grp.position).addScaledVector(perp, rand(-13, 13));
+        tmpV.y = rand(0.3, 12);
+        spawnP(tmpV, tmpV2.set(rand(-8, 8), rand(-2, 9), rand(-8, 8)), rand(0.5, 0.9), rand(0.5, 1), Math.random() < 0.5 ? 0x9fdcff : 0xff6644);
+      }
+      disposeClashMeshes();
+      clashFx = null;
+      for (const f of fighters) {
+        if (f.action && f.action.name === 'clashLock') { f.action = null; f.state = 'idle'; }
+      }
+      loser.invulnT = 0;
+      dealDamage(loser, winner, 85, { kb: 12, kbUp: 7, knockdown: true, ignoreGuard: true, sureHit: true });
+      announce(winner.cfg.name.split(' ').pop() + "'S DOMAIN PREVAILS", '', 1.4, winner.charKey === 'gojo' ? 'void' : 'shrine');
+      if (gameState === 'fight') {
+        const key = winner.charKey === 'gojo' ? 'void' : 'shrine';
+        domain = { owner: winner, key: key, t: 0, dur: 4.5, tick: 0, center: winner.pos.clone() };
+        if (key === 'void') applyVoid(); else applyShrine(winner);
+      } else {
+        restoreArena();
+      }
+    }
   }
 
   function applyVoid() {
@@ -3944,6 +4103,10 @@
     arena.groundMat.opacity = 1;
     arena.groundMat.needsUpdate = true;
     arena.ring.material.color.set(0x3f6dff);
+    arena.rimCyan.intensity = 0.5;
+    arena.rimCyan.position.set(-20, 8, -16);
+    arena.rimRed.intensity = 0.4;
+    arena.rimRed.position.set(20, 8, 16);
     if (bloomPass) bloomPass.strength = 0.5;
   }
 
@@ -4134,6 +4297,14 @@
       else if (f.buffer[bk] > 0) f.buffer[bk] -= dt;
     }
     const take = function (bk) { if (f.buffer[bk] > 0) { f.buffer[bk] = 0; return true; } return false; };
+
+    // counter domain from behind the Simple Domain barrier: guard + domain key
+    // while trapped in the enemy's domain drops the barrier into your own cast
+    if (f.guarding && canAct(f) && f.buffer.dom > 0 && domain && domain.owner !== f) {
+      f.buffer.dom = 0;
+      f.guarding = false;
+      tryDomain(f);
+    }
 
     // grab: light attack while guarding — breaks through guard and Infinity
     if (f.guarding && f.guardBreakT <= 0 && canAct(f) && f.buffer.light > 0) {
@@ -4674,6 +4845,7 @@
 
   function startRound() {
     clearProjectiles();
+    clearClash();
     endDomain();
     resetFighter(fighters[0], -5, 0, Math.PI / 2);
     resetFighter(fighters[1], 5, 0, -Math.PI / 2);
@@ -4688,6 +4860,7 @@
   function startWave() {
     // next survival wave: enemy resets stronger, the player keeps momentum + a breather heal
     clearProjectiles();
+    clearClash();
     endDomain();
     const player = fighters[0];
     const keepHp = player.hp, keepCe = player.ce;
@@ -4719,6 +4892,7 @@
     const a = fighters[0], b = fighters[1];
     const winner = a.hp >= b.hp ? a : b;
     const loser = opponentOf(winner);
+    clearClash();
     endDomain();
     winner.action = null;
     loser.action = null;
@@ -4779,6 +4953,7 @@
 
   function backToMenu() {
     gameState = 'menu';
+    clearClash();
     endDomain();
     clearProjectiles();
     showScreen('menu');
@@ -4871,6 +5046,7 @@
       fighterCollision();
       updateProjectiles(dt);
       updateDomain(dt);
+      updateClash(dt);
     } else if (gameState === 'roundEnd') {
       roundEndT -= dt;
       for (const f of fighters) { f.input = NULL_INPUT; updateFighter(f, dt); }
@@ -4938,6 +5114,7 @@
     get domain() { return domain; },
     get state() { return gameState; },
     get projectiles() { return projectiles; },
+    get clash() { return clashFx; },
     giveCE: function (idx, amt) { if (fighters[idx]) fighters[idx].ce = amt; },
   };
 })();
