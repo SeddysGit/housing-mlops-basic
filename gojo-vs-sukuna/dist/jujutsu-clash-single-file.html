@@ -2216,6 +2216,7 @@
   /* ================= GLOBALS ================= */
   let scene, camera, renderer, clock;
   let composer = null;
+  let bloomPass = null;
   let glowOn = true;
   try { glowOn = localStorage.getItem('jjk-glow') !== 'off'; } catch (e) {}
   let fighters = [];
@@ -2320,7 +2321,8 @@
     if (THREE.EffectComposer && THREE.UnrealBloomPass) {
       composer = new THREE.EffectComposer(renderer);
       composer.addPass(new THREE.RenderPass(scene, camera));
-      composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.78));
+      bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.5, 0.4, 0.78);
+      composer.addPass(bloomPass);
       composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
     }
 
@@ -2481,30 +2483,98 @@
 
   function buildVoidGroup() {
     arena.voidGroup = new THREE.Group();
+    // --- deep-space nebula skysphere ---
     const c = document.createElement('canvas');
-    c.width = 512; c.height = 512;
+    c.width = 1024; c.height = 512;
     const g = c.getContext('2d');
-    g.fillStyle = '#030108';
-    g.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 900; i++) {
-      const a = Math.random();
-      g.fillStyle = a < 0.5 ? 'rgba(150,120,255,' + rand(0.1, 0.7) + ')' : 'rgba(255,255,255,' + rand(0.1, 0.6) + ')';
-      const s = Math.random() < 0.92 ? 1 : 2;
-      g.fillRect(Math.random() * 512, Math.random() * 512, s, s);
-    }
-    // nebula wisps
-    for (let i = 0; i < 14; i++) {
-      const gr = g.createRadialGradient(Math.random() * 512, Math.random() * 512, 2, Math.random() * 512, Math.random() * 512, rand(40, 110));
-      gr.addColorStop(0, 'rgba(' + (Math.random() < 0.5 ? '120,60,220' : '40,80,200') + ',0.12)');
+    const bg = g.createLinearGradient(0, 0, 0, 512);
+    bg.addColorStop(0, '#04020e');
+    bg.addColorStop(0.42, '#0d0726');
+    bg.addColorStop(0.58, '#170d3d');
+    bg.addColorStop(0.72, '#0d0726');
+    bg.addColorStop(1, '#04020e');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, 1024, 512);
+    // nebula clouds
+    const nebulaCols = ['110,60,230', '40,90,235', '190,70,255', '60,150,255'];
+    for (let i = 0; i < 30; i++) {
+      const x = Math.random() * 1024, y = 130 + Math.random() * 260, r = rand(50, 170);
+      const gr = g.createRadialGradient(x, y, 4, x, y, r);
+      gr.addColorStop(0, 'rgba(' + nebulaCols[i % 4] + ',' + rand(0.06, 0.16) + ')');
       gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr;
-      g.fillRect(0, 0, 512, 512);
+      g.fillRect(0, 0, 1024, 512);
+    }
+    // wavy luminous galactic band — the flowing "sea of information"
+    for (let i = 0; i < 900; i++) {
+      const x = Math.random() * 1024;
+      const yC = 275 + Math.sin(x * 0.012 + 1.7) * 34;
+      const y = yC + rand(-1, 1) * rand(0, 42);
+      const nearBand = 1 - Math.min(1, Math.abs(y - yC) / 46);
+      const s = Math.random() < 0.85 ? rand(1, 2.4) : rand(2.4, 4.5);
+      const warm = Math.random() < 0.55;
+      g.fillStyle = 'rgba(' + (warm ? '235,225,255' : '150,180,255') + ',' + (0.12 + nearBand * rand(0.3, 0.8)) + ')';
+      g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill();
+    }
+    // stars with occasional glow halos
+    for (let i = 0; i < 1400; i++) {
+      const x = Math.random() * 1024, y = Math.random() * 512;
+      const bright = rand(0.15, 0.95);
+      if (Math.random() < 0.06) {
+        const gr = g.createRadialGradient(x, y, 0.5, x, y, rand(3, 7));
+        gr.addColorStop(0, 'rgba(255,255,255,' + bright + ')');
+        gr.addColorStop(1, 'rgba(120,140,255,0)');
+        g.fillStyle = gr;
+        g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill();
+      } else {
+        g.fillStyle = Math.random() < 0.6 ? 'rgba(255,255,255,' + bright + ')' : 'rgba(165,150,255,' + bright + ')';
+        g.fillRect(x, y, rand(0.7, 1.8), rand(0.7, 1.8));
+      }
     }
     const tex = new THREE.CanvasTexture(c);
     tex.encoding = THREE.sRGBEncoding;
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(90, 24, 16), new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false }));
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(90, 32, 20), new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false }));
     arena.voidGroup.add(sphere);
     arena.voidSphere = sphere;
+
+    // --- flowing ribbons of light circling the void ---
+    arena.voidRibbons = [];
+    const ribbonCfg = [
+      { r: 30, tube: 0.22, color: 0x7f9fff, tilt: 1.18, y: 13, op: 0.55 },
+      { r: 39, tube: 0.3, color: 0xb87fff, tilt: 1.62, y: 9, op: 0.4 },
+      { r: 24, tube: 0.13, color: 0xffffff, tilt: 0.95, y: 18, op: 0.5 },
+    ];
+    for (const rc of ribbonCfg) {
+      const ribbon = new THREE.Mesh(
+        new THREE.TorusGeometry(rc.r, rc.tube, 8, 120),
+        new THREE.MeshBasicMaterial({ color: rc.color, transparent: true, opacity: rc.op, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })
+      );
+      ribbon.rotation.x = rc.tilt;
+      ribbon.position.y = rc.y;
+      arena.voidGroup.add(ribbon);
+      arena.voidRibbons.push(ribbon);
+    }
+
+    // --- the singularity: a blazing point in the void sky ---
+    const sing = new THREE.Mesh(new THREE.SphereGeometry(1.7, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
+    sing.position.set(0, 34, -58);
+    arena.voidGroup.add(sing);
+    arena.voidSingularity = sing;
+    const haloC = document.createElement('canvas');
+    haloC.width = haloC.height = 128;
+    const hg = haloC.getContext('2d');
+    const hgr = hg.createRadialGradient(64, 64, 4, 64, 64, 62);
+    hgr.addColorStop(0, 'rgba(255,255,255,0.9)');
+    hgr.addColorStop(0.3, 'rgba(190,150,255,0.4)');
+    hgr.addColorStop(1, 'rgba(90,60,220,0)');
+    hg.fillStyle = hgr;
+    hg.fillRect(0, 0, 128, 128);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(haloC), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    halo.scale.set(30, 30, 1);
+    halo.position.copy(sing.position);
+    arena.voidGroup.add(halo);
+    arena.voidHalo = halo;
+
     arena.voidGroup.visible = false;
     scene.add(arena.voidGroup);
   }
@@ -3820,13 +3890,18 @@
     arena.stars.visible = false;
     arena.moon.visible = false;
     scene.fog.color.set(0x050110);
-    scene.fog.density = 0.004;
-    arena.hemi.intensity = 0.35;
+    scene.fog.density = 0.0015; // near-clear so the cosmos reads to the horizon
+    arena.hemi.intensity = 0.3;
     arena.hemi.color.set(0x8f7fff);
     arena.moonLight.intensity = 0.7;
     arena.moonLight.color.set(0xb9a5ff);
-    arena.groundMat.color.set(0x2a2140);
+    // dark glass floor: the void shows through beneath the fighters
+    arena.groundMat.color.set(0x0b0918);
+    arena.groundMat.transparent = true;
+    arena.groundMat.opacity = 0.55;
+    arena.groundMat.needsUpdate = true;
     arena.ring.material.color.set(0x8f6fff);
+    if (bloomPass) bloomPass.strength = 0.62;
   }
 
   function applyShrine(f) {
@@ -3860,12 +3935,16 @@
     arena.moon.visible = true;
     scene.fog.color.set(0x0a0e1c);
     scene.fog.density = 0.011;
-    arena.hemi.intensity = 0.75;
+    arena.hemi.intensity = 0.5;
     arena.hemi.color.set(0x8fa3d0);
-    arena.moonLight.intensity = 1.15;
+    arena.moonLight.intensity = 0.95;
     arena.moonLight.color.set(0xbdd3ff);
     arena.groundMat.color.set(0xffffff);
+    arena.groundMat.transparent = false;
+    arena.groundMat.opacity = 1;
+    arena.groundMat.needsUpdate = true;
     arena.ring.material.color.set(0x3f6dff);
+    if (bloomPass) bloomPass.strength = 0.5;
   }
 
   function endDomain() {
@@ -3882,7 +3961,22 @@
 
     if (domain.key === 'void') {
       arena.voidSphere.rotation.y += dt * 0.05;
-      arena.voidSphere.rotation.z += dt * 0.02;
+      arena.voidSphere.rotation.z += dt * 0.008;
+      // ribbons of light drift; the singularity breathes
+      for (let ri = 0; ri < arena.voidRibbons.length; ri++) {
+        const rb = arena.voidRibbons[ri];
+        rb.rotation.z += dt * (0.05 + ri * 0.035) * (ri % 2 === 0 ? 1 : -1);
+        rb.rotation.x += dt * 0.012 * (ri % 2 === 0 ? -1 : 1);
+      }
+      const pulse = 1 + Math.sin(elapsed * 2.4) * 0.12;
+      arena.voidHalo.scale.set(30 * pulse, 30 * pulse, 1);
+      arena.voidSingularity.scale.setScalar(pulse);
+      // motes of light drifting up through the infinite space
+      if (Math.random() < 0.2) {
+        const ma = rand(0, Math.PI * 2), mr = rand(3, 17);
+        tmpV.set(Math.cos(ma) * mr, rand(0, 5), Math.sin(ma) * mr);
+        spawnP(tmpV, tmpV2.set(rand(-0.2, 0.2), rand(0.4, 1), rand(-0.2, 0.2)), rand(0.9, 1.6), rand(0.1, 0.22), Math.random() < 0.75 ? 0x7d6fd0 : 0x6f8fd0);
+      }
       if (simpleDomainUp(victim)) {
         // Simple Domain holds back the infinite information
         victim.ce = Math.max(0, victim.ce - 30 * dt);
@@ -3901,8 +3995,14 @@
         domain.tick = 0.5;
         if (!(victim.sdT > 0)) {
           dealDamage(victim, owner, 8, { dot: true });
-          spawnP(victim.pos.clone().add(tmpV.set(rand(-0.6, 0.6), rand(0.5, 2), rand(-0.6, 0.6))), tmpV.set(0, 1.5, 0), 0.5, 0.5, 0xbfaaff);
         }
+      }
+      // streams of raw information pouring into the victim's mind
+      if (victim.state === 'stunned' && Math.random() < 0.4) {
+        const sa = rand(0, Math.PI * 2), sr = rand(2.5, 4.5);
+        tmpV.set(victim.pos.x + Math.cos(sa) * sr, victim.pos.y + rand(0.5, 3), victim.pos.z + Math.sin(sa) * sr);
+        tmpV2.set(victim.pos.x - tmpV.x, victim.pos.y + 1.55 - tmpV.y, victim.pos.z - tmpV.z).multiplyScalar(2.6);
+        spawnP(tmpV, tmpV2, 0.38, 0.2, Math.random() < 0.3 ? 0xcfc4ff : 0x9f8fe0);
       }
     } else {
       // Malevolent Shrine: slashes rain inside the ring
