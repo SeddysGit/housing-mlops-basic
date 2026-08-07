@@ -61,6 +61,10 @@ a **hit counter**, and big impacts land with a hit-stop freeze frame.
 - **Infinity Warp** — Gojo doesn't dash, he *blinks*: an instant teleport with afterimages,
   on the ground or mid-air, i-frames included.
 - **Six Eyes** (passive) — regenerates cursed energy ~30% faster than Sukuna.
+- **Maximum: Purple** (`B`, 300 CE) — *"Throughout Heaven and Earth, I Alone Am the
+  Honored One."* A long armored chant, then a colossal purple that flattens everything
+  in its lane for 400, erases enemy projectiles it touches — and **banishes Mahoraga
+  outright**. The answer to the Divine General.
 - **Domain: Unlimited Void** — the world drops into the void; the enemy is overwhelmed
   by infinite information (stunned, damage over time — but Void never kills on its own).
 
